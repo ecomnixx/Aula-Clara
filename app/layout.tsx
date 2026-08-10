@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./v2.css";
+import "./v3.css";
 
 export const metadata: Metadata = {
   title: "Aula Clara — Planejamento docente",

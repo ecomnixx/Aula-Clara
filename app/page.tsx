@@ -1,163 +1,75 @@
 "use client";
 
+import { createWorker } from "tesseract.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Material = "aula" | "prova";
-type SavedItem = { id: number; type: Material; title: string; subject: string; grade: string; createdAt: string };
+type MaterialType = "aula" | "prova";
+type SavedItem = { id:number; type:MaterialType; title:string; subject:string; grade:string; className:string; bimester:number; content:string; createdAt:string };
+const subjects=["Língua Portuguesa","Matemática","Ciências","História","Geografia","Educação Física","Arte","Inglês"];
+const grades=["1º Ano","2º Ano","3º Ano","4º Ano","5º Ano","6º Ano","7º Ano","8º Ano","9º Ano","1ª Série EM","2ª Série EM","3ª Série EM"];
+const topics:Record<string,string>={"Língua Portuguesa":"leitura, interpretação e gêneros discursivos",Matemática:"resolução de problemas, grandezas e proporcionalidade",Ciências:"ecossistemas e relações entre os seres vivos",História:"transformações históricas e diversidade cultural",Geografia:"território, paisagem e relações socioambientais","Educação Física":"jogos, esportes, inclusão e cooperação",Arte:"linguagens artísticas e processos criativos",Inglês:"leitura e compreensão de textos cotidianos"};
+const skills:Record<string,string[]>={"Língua Portuguesa":["EF67LP28","EF69LP44"],Matemática:["EF06MA15","EF07MA17"],Ciências:["EF07CI07","EF08CI07"],História:["EF06HI05","EF08HI14"],Geografia:["EF06GE01","EF08GE05"],"Educação Física":["EF67EF03","EF89EF06"],Arte:["EF69AR05","EF69AR06"],Inglês:["EF06LI08","EF08LI05"]};
 
-const subjects = ["Língua Portuguesa", "Matemática", "Ciências", "História", "Geografia", "Educação Física", "Arte", "Inglês"];
-const grades = ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "1ª Série EM", "2ª Série EM", "3ª Série EM"];
-const topics: Record<string, string> = {
-  "Língua Portuguesa": "interpretação de texto e gêneros discursivos",
-  Matemática: "razão, proporção e resolução de problemas",
-  Ciências: "ecossistemas e relações entre os seres vivos",
-  História: "transformações sociais e culturais",
-  Geografia: "território, paisagem e relações socioambientais",
-  "Educação Física": "jogos, esportes, inclusão e cooperação",
-  Arte: "linguagens visuais e processos criativos",
-  Inglês: "leitura e compreensão de textos cotidianos",
-};
-
-function Icon({ children }: { children: React.ReactNode }) {
-  return <span className="icon" aria-hidden="true">{children}</span>;
-}
-
-export default function Home() {
-  const [view, setView] = useState<"home" | "create" | "saved">("home");
-  const [menu, setMenu] = useState(false);
-  const [subject, setSubject] = useState("Língua Portuguesa");
-  const [grade, setGrade] = useState("8º Ano");
-  const [lessons, setLessons] = useState(1);
-  const [questionCount, setQuestionCount] = useState(10);
-  const [difficulty, setDifficulty] = useState("Intermediária");
-  const [schoolName, setSchoolName] = useState("");
-  const [teacherName, setTeacherName] = useState("Lucas");
-  const [files, setFiles] = useState<File[]>([]);
-  const [text, setText] = useState("");
-  const [mode, setMode] = useState<Material | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState<Material | null>(null);
-  const [saved, setSaved] = useState<SavedItem[]>([]);
-  const [toast, setToast] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const current = localStorage.getItem("aula-clara-saved");
-    if (current) setSaved(JSON.parse(current));
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-  }, []);
-
-  const topic = topics[subject];
-  const title = subject === "Educação Física" ? "Circuito cooperativo: movimento e inclusão" : `Explorando ${topic}`;
-
-  const lessonPlan = useMemo(() => ({
-    objective: `Compreender ${topic}, relacionando o conteúdo às experiências dos estudantes e desenvolvendo argumentação, colaboração e autonomia.`,
-    skills: subject === "Educação Física" ? ["EF89EF01", "EF89EF06"] : ["EF08LP03", "EF08LP14"],
-    steps: [
-      "Acolhida e ativação dos conhecimentos prévios com uma pergunta disparadora.",
-      `Apresentação dialogada do tema ${topic}, usando exemplos do material enviado.`,
-      "Atividade em duplas ou grupos com registro das descobertas e resolução de um desafio.",
-      "Socialização das respostas, síntese coletiva e avaliação formativa de saída.",
-    ],
-  }), [subject, topic]);
-
-  const exam = useMemo(() => [
-    `Explique, com suas palavras, o que você compreendeu sobre ${topic}.`,
-    `Assinale a alternativa que melhor representa uma aplicação de ${topic}:\nA) Repetir informações sem analisá-las.\nB) Relacionar conceitos e situações reais.\nC) Ignorar o contexto apresentado.\nD) Memorizar palavras isoladas.\nE) Evitar compartilhar ideias.`,
-    `Leia o material apresentado e identifique duas ideias centrais relacionadas a ${topic}.`,
-    "Justifique por que a alternativa B da questão 2 é a mais adequada.",
-    `Crie um exemplo do cotidiano que ajude a explicar ${topic}.`,
-    "Compare duas informações do texto-base e indique uma semelhança e uma diferença.",
-    "Que habilidade foi mais importante para resolver as questões? Explique.",
-    "Proponha uma atividade em grupo para aprofundar o assunto estudado.",
-    "Resuma o conteúdo em até três frases.",
-    "Autoavaliação: qual parte foi mais fácil e qual exige mais estudo?",
-  ], [topic]);
-
-  function flash(message: string) { setToast(message); window.setTimeout(() => setToast(""), 2600); }
-  function chooseFiles(list: FileList | null) {
-    if (!list) return;
-    setFiles(Array.from(list));
-    setText(`Material carregado com sucesso. ${list.length} imagem(ns) pronta(s) para leitura.\n\nEdite este campo para incluir o texto extraído ou cole aqui o conteúdo da apostila.`);
-  }
-  function generate(kind: Material) {
-    setMode(kind); setGenerating(true); setGenerated(null);
-    window.setTimeout(() => { setGenerating(false); setGenerated(kind); document.getElementById("result")?.scrollIntoView({ behavior: "smooth" }); }, 900);
-  }
-  function saveCurrent(kind: Material) {
-    const item = { id: Date.now(), type: kind, title: kind === "aula" ? title : `Avaliação — ${topic}`, subject, grade, createdAt: new Date().toLocaleDateString("pt-BR") };
-    const next = [item, ...saved]; setSaved(next); localStorage.setItem("aula-clara-saved", JSON.stringify(next)); flash("Material salvo no aparelho");
-  }
-  function removeSaved(id: number) {
-    const next = saved.filter(item => item.id !== id);
-    setSaved(next); localStorage.setItem("aula-clara-saved", JSON.stringify(next)); flash("Material removido");
-  }
-  async function shareCurrent() {
-    const data = { title: generated === "aula" ? title : `Avaliação — ${subject}`, text: `Material de ${subject} para o ${grade}, criado no Aula Clara.`, url: window.location.href };
-    if (navigator.share) await navigator.share(data).catch(() => undefined);
-    else { await navigator.clipboard.writeText(window.location.href); flash("Link copiado"); }
-  }
-  function downloadWord() {
-    const questions = exam.slice(0, questionCount).map((q, i) => `<p><b>${i + 1}.</b> ${q.replaceAll("\n", "<br>")}</p><p>&nbsp;</p>`).join("");
-    const html = `<html><head><meta charset="utf-8"><style>@page{margin:2cm}body{font-family:Arial,sans-serif;font-size:11pt;line-height:1}p{margin:0}h1{text-align:center;font-size:14pt}.line{border-bottom:1px solid #000;display:inline-block;width:65%}</style></head><body><h1>AVALIAÇÃO DE ${subject.toUpperCase()}</h1><p>Escola: ${schoolName || '<span class="line"></span>'}</p><p>Professor(a): ${teacherName || '<span class="line"></span>'}</p><p>Aluno(a): <span class="line"></span></p><p>Turma: ${grade} &nbsp;&nbsp; Data: ____/____/______</p><p>Nível: ${difficulty}</p><br>${questions}<br><h2>Gabarito do professor</h2><p>1. Resposta pessoal coerente com o tema. 2. B. Demais questões: respostas conforme o conteúdo trabalhado.</p></body></html>`;
-    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `prova-${subject.toLowerCase().replaceAll(" ", "-")}.doc`; a.click(); URL.revokeObjectURL(url); flash("Prova baixada em formato Word");
-  }
-
-  return <main className="app-shell">
-    <header className="topbar">
-      <button className="menu-button" onClick={() => setMenu(true)} aria-label="Abrir menu">☰</button>
-      <button className="brand" onClick={() => setView("home")}><span className="logo">A</span><span><b>Aula Clara</b><small>Da apostila para o bimestre inteiro.</small></span></button>
-      <span className="avatar">PL</span>
-    </header>
-
-    {menu && <div className="menu-backdrop" onClick={() => setMenu(false)}><aside className="drawer" onClick={e => e.stopPropagation()}>
-      <button className="close" onClick={() => setMenu(false)}>×</button><div className="drawer-brand"><span className="logo large">A</span><h2>Aula Clara</h2></div>
-      {[['⌂','Área inicial','home'],['▣','Gerar aulas','create'],['▤','Banco de provas','saved'],['▦','Plano bimestral','saved'],['□','Materiais e turmas','saved'],['↧','Downloads e avaliações','saved']].map(([ic,label,target]) => <button key={label} onClick={() => {setView(target as typeof view);setMenu(false)}}><Icon>{ic}</Icon>{label}<span>›</span></button>)}
-      <footer>Aula Clara v1.0 · Plataforma docente</footer>
-    </aside></div>}
-
-    {view === "home" && <section className="page home">
-      <div className="welcome"><span className="eyebrow">PLANEJAMENTO INTELIGENTE</span><h1>Professor Lucas,<br/>vamos começar?</h1><p>Transforme páginas da apostila em aulas e avaliações prontas para usar.</p></div>
-      <div className="quick-card"><Icon>⌁</Icon><div><b>Importação rápida</b><p>Fotografe ou selecione o material e deixe a organização com a Aula Clara.</p></div></div>
-      <h2 className="section-title">O que você quer preparar?</h2>
-      <div className="action-grid">
-        <button onClick={() => {setView("create");setMode("aula")}}><Icon>▤</Icon><b>Gerar aula</b><span>Plano completo alinhado à BNCC</span><em>Começar →</em></button>
-        <button onClick={() => {setView("create");setMode("prova")}}><Icon>✓</Icon><b>Gerar prova</b><span>Questões e gabarito em Word</span><em>Começar →</em></button>
-      </div>
-      <div className="feature-strip"><div><b>BNCC</b><span>Habilidades relacionadas</span></div><div><b>1 toque</b><span>Exportação para Word</span></div><div><b>Local</b><span>Histórico no aparelho</span></div></div>
-      <div className="v2-callout"><span>✦</span><div><b>Seu assistente pedagógico</b><p>Crie, revise, salve, imprima e compartilhe sem sair do celular.</p></div></div>
-    </section>}
-
-    {view === "create" && <section className="page create-page">
-      <div className="page-heading"><span className="eyebrow">NOVO MATERIAL</span><h1>Prepare sua próxima aula</h1><p>Informe a turma e envie o conteúdo que será trabalhado.</p></div>
-      <section className="card"><div className="card-title"><Icon>▤</Icon><div><b>1. Disciplina e turma</b><small>Usaremos estes dados para organizar o material.</small></div></div>
-        <label>Disciplina<select value={subject} onChange={e => setSubject(e.target.value)}>{subjects.map(x => <option key={x}>{x}</option>)}</select></label>
-        <label>Ano / série<select value={grade} onChange={e => setGrade(e.target.value)}>{grades.map(x => <option key={x}>{x}</option>)}</select></label>
-        <div className="lesson-count"><span>Quantidade de aulas</span><div>{[1,2,3,4,5,6,8,10].map(x => <button className={lessons === x ? "active" : ""} onClick={() => setLessons(x)} key={x}>{x}</button>)}</div></div>
-      </section>
-      <section className="card upload"><div className="card-title"><Icon>▣</Icon><div><b>2. Material da apostila</b><small>Envie fotos nítidas e na ordem das páginas.</small></div></div>
-        <input ref={fileRef} hidden type="file" accept="image/*,.pdf" multiple onChange={e => chooseFiles(e.target.files)}/>
-        <button className="upload-zone" onClick={() => fileRef.current?.click()}><span>＋</span><b>Escolher imagens ou PDF</b><small>Você pode selecionar várias páginas</small></button>
-        {files.length > 0 && <div className="file-list"><b>✓ {files.length} arquivo(s) selecionado(s)</b>{files.slice(0,4).map(f => <span key={f.name}>{f.name}</span>)}</div>}
-        <label>Texto identificado / conteúdo<textarea value={text} onChange={e => setText(e.target.value)} placeholder="O texto extraído aparecerá aqui. Você também pode colar ou digitar o conteúdo."/></label>
-      </section>
-      <section className="card"><div className="card-title"><Icon>✦</Icon><div><b>3. Escolha o material</b><small>Você poderá editar antes de salvar ou baixar.</small></div></div>
-        {subject === "Educação Física" && <div className="pe-option"><b>Educação Física · formato da aula</b><p>O plano será estruturado como aula prática, com materiais, espaço, segurança, organização e adaptações.</p></div>}
-        <div className="generate-options"><button onClick={() => generate("aula")} className={mode === "aula" ? "selected" : ""}><Icon>▤</Icon><b>Gerar plano de aula</b><span>{lessons} aula(s) · sequência didática completa</span></button><button onClick={() => setMode("prova")} className={mode === "prova" ? "selected" : ""}><Icon>✓</Icon><b>Configurar avaliação</b><span>Questões, gabarito e arquivo Word</span></button></div>
-        {mode === "prova" && <div className="exam-settings"><div><label>Quantidade<select value={questionCount} onChange={e => setQuestionCount(Number(e.target.value))}><option value="5">5 questões</option><option value="8">8 questões</option><option value="10">10 questões</option></select></label><label>Dificuldade<select value={difficulty} onChange={e => setDifficulty(e.target.value)}><option>Básica</option><option>Intermediária</option><option>Avançada</option></select></label></div><label>Nome da escola<input value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="Opcional"/></label><label>Professor(a)<input value={teacherName} onChange={e => setTeacherName(e.target.value)}/></label><button className="create-exam" onClick={() => generate("prova")}>Gerar avaliação personalizada</button></div>}
-      </section>
-      {generating && <div className="generating"><span></span><b>Organizando seu material...</b><p>Relacionando conteúdo, turma e habilidades pedagógicas.</p></div>}
-      {generated && !generating && <section id="result" className="result-card">
-        <div className="result-head"><span className="eyebrow">MATERIAL GERADO</span><h2>{generated === "aula" ? title : `Avaliação — ${subject}`}</h2><p>{subject} · {grade} · {lessons} aula(s)</p></div>
-        {generated === "aula" ? <div className="result-body" contentEditable suppressContentEditableWarning><h3>Objetivo de aprendizagem</h3><p>{lessonPlan.objective}</p><h3>Habilidades BNCC relacionadas</h3><div className="skills">{lessonPlan.skills.map(s => <span key={s}>{s}</span>)}</div><h3>Recursos necessários</h3><p>{subject === "Educação Física" ? "Cones, bolas, coletes, cronômetro, quadra ou espaço livre e água para hidratação." : "Apostila, quadro, caderno, cartões de atividade e recursos visuais disponíveis."}</p><h3>Desenvolvimento</h3><ol>{lessonPlan.steps.map((s,i) => <li key={s}><b>{i+1}</b><span>{s}</span></li>)}</ol><h3>Avaliação</h3><p>Observação da participação, dos registros e da capacidade de relacionar o conteúdo às situações propostas.</p><aside><b>Dica do professor</b><p>Reserve os cinco minutos finais para uma síntese feita pelos próprios estudantes.</p></aside></div> : <div className="result-body exam" contentEditable suppressContentEditableWarning><div className="school-lines"><span>Escola: {schoolName || "___________________________"}</span><span>Professor(a): {teacherName}</span><span>Aluno(a): _________________________</span><span>Nível: {difficulty}</span></div>{exam.slice(0, questionCount).map((q,i) => <div key={q}><b>{i+1}.</b><p>{q}</p></div>)}<details><summary>Ver gabarito do professor</summary><p>Questão 2: alternativa B. Questões abertas: avaliar coerência, domínio do conteúdo e capacidade de argumentação.</p></details></div>}
-        <p className="edit-hint">✎ Toque no texto acima para fazer ajustes.</p><div className="result-actions multi"><button onClick={() => saveCurrent(generated)}>☆ Salvar</button><button onClick={shareCurrent}>↗ Compartilhar</button><button onClick={() => window.print()}>⌑ Imprimir</button>{generated === "prova" && <button className="primary" onClick={downloadWord}>↓ Baixar Word</button>}</div>
-      </section>}
-    </section>}
-
-    {view === "saved" && <section className="page saved-page"><div className="page-heading"><span className="eyebrow">BIBLIOTECA</span><h1>Materiais salvos</h1><p>Seus planos e avaliações ficam guardados neste aparelho.</p></div>{saved.length === 0 ? <div className="empty"><Icon>□</Icon><h2>Nenhum material salvo</h2><p>Gere uma aula ou prova e toque em “Salvar”.</p><button className="primary" onClick={() => setView("create")}>Criar material</button></div> : <div className="saved-list">{saved.map(item => <article key={item.id}><Icon>{item.type === "aula" ? "▤" : "✓"}</Icon><div><small>{item.type === "aula" ? "PLANO DE AULA" : "AVALIAÇÃO"}</small><b>{item.title}</b><span>{item.subject} · {item.grade} · {item.createdAt}</span></div><button onClick={() => removeSaved(item.id)} aria-label="Excluir material">×</button></article>)}</div>}</section>}
-
-    <nav className="bottom-nav"><button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><span>⌂</span>Início</button><button className={view === "create" ? "active" : ""} onClick={() => setView("create")}><span>＋</span>Criar</button><button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>□</span>Salvos</button></nav>
-    {toast && <div className="toast">✓ {toast}</div>}
-  </main>;
+export default function Home(){
+ const [view,setView]=useState<"home"|"create"|"saved">("home"); const [menu,setMenu]=useState(false);
+ const [segment,setSegment]=useState("Ensino Fundamental – Anos Finais"); const [subject,setSubject]=useState("Língua Portuguesa"); const [grade,setGrade]=useState("6º Ano"); const [peMode,setPeMode]=useState<"prática"|"teórica">("prática"); const [lessons,setLessons]=useState(1);
+ const [files,setFiles]=useState<File[]>([]); const [ocrText,setOcrText]=useState(""); const [reading,setReading]=useState(false); const [ocrProgress,setOcrProgress]=useState(0); const [expanded,setExpanded]=useState(false);
+ const [cameraOpen,setCameraOpen]=useState(false); const [screenOpen,setScreenOpen]=useState(false); const [countdown,setCountdown]=useState<number|null>(null);
+ const [generated,setGenerated]=useState<MaterialType|null>(null); const [generating,setGenerating]=useState(false); const [className,setClassName]=useState("Turma A"); const [bimester,setBimester]=useState(1); const [saved,setSaved]=useState<SavedItem[]>([]); const [folder,setFolder]=useState(1); const [editing,setEditing]=useState<SavedItem|null>(null); const [toast,setToast]=useState("");
+ const fileRef=useRef<HTMLInputElement>(null); const videoRef=useRef<HTMLVideoElement>(null); const streamRef=useRef<MediaStream|null>(null);
+ const topic=topics[subject]; const practical=subject==="Educação Física"&&peMode==="prática";
+ const previews=useMemo(()=>files.map(f=>({file:f,url:URL.createObjectURL(f)})),[files]);
+ useEffect(()=>{const raw=localStorage.getItem("aula-clara-saved");if(raw)setSaved(JSON.parse(raw));if("serviceWorker"in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>undefined);},[]);
+ useEffect(()=>()=>previews.forEach(p=>URL.revokeObjectURL(p.url)),[previews]);
+ function flash(m:string){setToast(m);setTimeout(()=>setToast(""),2600)}
+ function addFiles(list:FileList|File[]|null){if(!list)return;setFiles(old=>[...old,...Array.from(list)]);flash("Material adicionado")}
+ function clearFiles(){setFiles([]);setOcrText("");setExpanded(false)}
+ function removeFile(i:number){setFiles(old=>old.filter((_,n)=>n!==i))}
+ async function openCamera(){try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});streamRef.current=stream;setCameraOpen(true);setTimeout(()=>{if(videoRef.current)videoRef.current.srcObject=stream},100)}catch{flash("Permissão da câmera não foi concedida")}}
+ function stopStream(){streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;setCameraOpen(false);setScreenOpen(false)}
+ function captureVideo(name="foto-apostila.jpg"){const video=videoRef.current;if(!video)return;const c=document.createElement("canvas");c.width=video.videoWidth;c.height=video.videoHeight;c.getContext("2d")?.drawImage(video,0,0);c.toBlob(b=>{if(b)addFiles([new File([b],name,{type:"image/jpeg"})]);},"image/jpeg",.92)}
+ async function openScreenCapture(){try{const stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});streamRef.current=stream;setScreenOpen(true);setTimeout(()=>{if(videoRef.current)videoRef.current.srcObject=stream},100)}catch{flash("A captura de tela não está disponível neste aparelho")}}
+ async function delayedScreenShot(){setCountdown(3);for(let n=3;n>0;n--){setCountdown(n);await new Promise(r=>setTimeout(r,1000))}setCountdown(null);captureVideo(`captura-${files.length+1}.jpg`);stopStream();flash("Captura adicionada ao material")}
+ async function readImages(){if(!files.length){flash("Adicione pelo menos uma imagem");return}setReading(true);setOcrProgress(0);let all="";try{const worker=await createWorker("por",undefined,{logger:m=>{if(m.status==="recognizing text")setOcrProgress(Math.round((m.progress||0)*100))}});for(let i=0;i<files.length;i++){const {data}=await worker.recognize(files[i]);all+=`\n\n--- PÁGINA ${i+1} ---\n${data.text.trim()}`;setOcrProgress(Math.round(((i+1)/files.length)*100))}await worker.terminate();setOcrText(all.trim());flash("Leitura concluída")}catch{flash("Não foi possível concluir a leitura. Você pode digitar ou colar o texto.")}finally{setReading(false)}}
+ const classification=`Mapeado para ${subject} · ${grade} · ${segment}. Habilidades relacionadas: ${(skills[subject]||[]).join(", ")}. Unidade temática: ${topic}.`;
+ const lessonText=`PLANO DE AULA — ${subject.toUpperCase()}\n\nTema: ${topic}\nTurma: ${grade} · ${className}\nQuantidade: ${lessons} aula(s)\nFormato: ${practical?"Atividade prática":"Planejamento teórico"}\n\nOBJETIVO\nCompreender ${topic}, relacionando o conteúdo ao material encaminhado e desenvolvendo autonomia, colaboração e pensamento crítico.\n\nHABILIDADES BNCC\n${(skills[subject]||[]).join(" · ")}\n\nRECURSOS\n${practical?"Cones, bolas, coletes, cronômetro, quadra ou espaço livre e água para hidratação.":"Apostila, quadro, caderno, cartões de atividade e recursos visuais disponíveis."}\n\nDESENVOLVIMENTO\n1. Acolhida e levantamento dos conhecimentos prévios.\n2. Apresentação dialogada do conteúdo digitalizado.\n3. ${practical?"Vivência prática organizada em estações, com adaptações inclusivas.":"Atividade guiada em grupos com análise, registro e resolução de desafio."}\n4. Socialização, síntese coletiva e avaliação formativa.\n\nAVALIAÇÃO\nParticipação, registros, domínio do conteúdo e capacidade de relacionar conceitos às situações propostas.`;
+ const mc=[
+  {q:`Qual alternativa apresenta a ideia central do conteúdo sobre ${topic}?`,a:["Repetir palavras sem contexto","Relacionar conceitos e situações do material","Ignorar as informações principais","Memorizar somente datas","Evitar a discussão coletiva"],key:"B) Relacionar conceitos e situações do material."},
+  {q:`De acordo com o material, uma aprendizagem adequada sobre ${topic} acontece quando o estudante:`,a:["Analisa e aplica o conhecimento","Copia sem compreender","Desconsidera exemplos","Evita formular hipóteses","Trabalha sem consultar o conteúdo"],key:"A) Analisa e aplica o conhecimento."},
+  {q:"Qual ação demonstra participação ativa durante o estudo?",a:["Não registrar dúvidas","Recusar o trabalho em grupo","Comparar informações e justificar respostas","Responder sem ler","Desconsiderar opiniões"],key:"C) Comparar informações e justificar respostas."},
+  {q:"A principal função do texto-base na atividade é:",a:["Servir apenas como decoração","Apresentar informações para análise e aprendizagem","Substituir toda explicação do professor","Impedir interpretações","Oferecer respostas sem reflexão"],key:"B) Apresentar informações para análise e aprendizagem."},
+  {q:`Ao estudar ${topic}, qual habilidade é mais importante?`,a:["Argumentar com base em evidências","Evitar perguntas","Apagar os registros","Ignorar o contexto","Repetir a primeira resposta"],key:"A) Argumentar com base em evidências."}
+ ];
+ const disc=[
+  {q:`Explique com suas palavras o que você compreendeu sobre ${topic}.`,key:`Resposta esperada: explicação coerente de ${topic}, utilizando informações do conteúdo digitalizado e exemplos estudados.`},
+  {q:"Cite duas informações importantes presentes no material e explique a relação entre elas.",key:"Resposta esperada: duas informações literais do material acompanhadas de uma relação lógica e corretamente justificada."},
+  {q:"Apresente um exemplo cotidiano que ajude a compreender o conteúdo estudado.",key:`Resposta esperada: exemplo pertinente e claramente relacionado a ${topic}.`},
+  {q:"Qual parte do conteúdo você considera mais importante? Justifique.",key:"Resposta esperada: escolha explícita de uma parte do conteúdo com justificativa baseada no material."},
+  {q:"Elabore uma síntese do conteúdo em até cinco linhas.",key:`Resposta esperada: síntese que mantenha as ideias centrais de ${topic}, sem acrescentar informações incorretas.`}
+ ];
+ const examText=`AVALIAÇÃO BIMESTRAL DE ${subject.toUpperCase()} — ${bimester}º BIMESTRE\n${grade}\n\n${mc.map((x,i)=>`QUESTÃO ${i+1} (1,0)\n${x.q}\n${x.a.map((a,n)=>`${String.fromCharCode(65+n)}) ${a}`).join("\n")}`).join("\n\n")}\n\n${disc.map((x,i)=>`QUESTÃO ${i+6} (1,0)\n${x.q}`).join("\n\n")}\n\nGABARITO DO PROFESSOR\n${[...mc,...disc].map((x,i)=>`${i+1}. ${x.key}`).join("\n")}`;
+ function generate(type:MaterialType){setGenerated(null);setGenerating(true);setTimeout(()=>{setGenerated(type);setGenerating(false);setTimeout(()=>document.getElementById("result")?.scrollIntoView({behavior:"smooth"}),50)},900)}
+ function saveMaterial(){if(!generated)return;const content=generated==="aula"?lessonText:examText;const item:SavedItem={id:Date.now(),type:generated,title:generated==="aula"?`Plano — ${topic}`:`Prova — ${subject}`,subject,grade,className,bimester,content,createdAt:new Date().toLocaleDateString("pt-BR")};const next=[item,...saved];setSaved(next);localStorage.setItem("aula-clara-saved",JSON.stringify(next));flash(`Salvo em ${className} / ${bimester}º bimestre`)}
+ function persistEdit(){if(!editing)return;const next=saved.map(x=>x.id===editing.id?editing:x);setSaved(next);localStorage.setItem("aula-clara-saved",JSON.stringify(next));setEditing(null);flash("Arquivo atualizado")}
+ function deleteSaved(id:number){const next=saved.filter(x=>x.id!==id);setSaved(next);localStorage.setItem("aula-clara-saved",JSON.stringify(next))}
+ async function logoData(){const blob=await fetch("/colegio-almanac.jpg").then(r=>r.blob());return await new Promise<string>(resolve=>{const fr=new FileReader();fr.onload=()=>resolve(String(fr.result));fr.readAsDataURL(blob)})}
+ async function downloadWord(){const logo=await logoData();const questions=[...mc,...disc].map((x,i)=>`<p class="qt"><b>QUESTÃO ${i+1}</b><span>(1,0)</span></p><p>${x.q}</p>${"a"in x?`<p>${x.a.map((a,n)=>`${String.fromCharCode(65+n)}) ${a}`).join("<br>")}</p>`:`<p class="lines">_________________________________________________________________________________<br>_________________________________________________________________________________<br>_________________________________________________________________________________</p>`}`).join("");const answers=[...mc,...disc].map((x,i)=>`<p><b>${i+1}.</b> ${x.key}</p>`).join("");const html=`<html><head><meta charset="utf-8"><style>@page{size:A4;margin:.4in .4in .75in .3in}body{font-family:Arial,sans-serif;font-size:11pt;line-height:1}.head{width:100%;border-collapse:collapse}.head td{border:1px solid #000;padding:6px}.brand{width:82%;text-align:center}.brand img{width:85px;float:left}.brand b{font-size:14pt}.side{width:18%;text-align:center}.student{clear:both;text-align:left;margin-top:8px}.qt{margin-top:14px;border-bottom:1px solid #000}.qt span{float:right}.lines{line-height:1.65}.answers{page-break-before:always}</style></head><body><table class="head"><tr><td class="brand"><img src="${logo}"><b>COLÉGIO ALMANAC</b><br>AVALIAÇÃO BIMESTRAL DE<br><b>${subject.toUpperCase()} — ${bimester}º BIMESTRE</b><div class="student">ALUNO: ___________________________________________ nº ____ &nbsp; ${grade}</div></td><td class="side"><b>NOTA:</b><br><br><br><b>DATA:</b><br>____/____/26</td></tr></table>${questions}<div class="answers"><h2>GABARITO DO PROFESSOR</h2>${answers}</div></body></html>`;const blob=new Blob(["\ufeff",html],{type:"application/msword"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${grade}-${subject}-bimestre-${bimester}.doc`;a.click();URL.revokeObjectURL(url);flash("Prova baixada em Word")}
+ return <main className="app-shell">
+  <header className="topbar"><button className="menu-button" onClick={()=>setMenu(true)}>☰</button><button className="brand" onClick={()=>setView("home")}><span className="logo">A</span><span><b>Aula Clara</b><small>Da apostila para o bimestre inteiro.</small></span></button><span className="avatar">PL</span></header>
+  {menu&&<div className="menu-backdrop" onClick={()=>setMenu(false)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setMenu(false)}>×</button><div className="drawer-brand"><span className="logo large">A</span><h2>Aula Clara</h2></div>{[["⌂","Área inicial","home"],["▤","Gerar material","create"],["□","Pastas e arquivos","saved"]].map(x=><button key={x[1]} onClick={()=>{setView(x[2] as typeof view);setMenu(false)}}><span className="icon">{x[0]}</span>{x[1]}<span>›</span></button>)}</aside></div>}
+  {view==="home"&&<section className="page home"><div className="welcome"><span className="eyebrow">PLANEJAMENTO INTELIGENTE</span><h1>Professor Lucas,<br/>vamos começar?</h1><p>Digitalize a apostila e transforme o conteúdo em planejamento ou avaliação.</p></div><div className="quick-card"><span className="icon">⌁</span><div><b>Fluxo completo</b><p>Disciplina, leitura das imagens, BNCC, aula, prova e organização por bimestre.</p></div></div><div className="action-grid"><button onClick={()=>setView("create")}><span className="icon">▤</span><b>Novo material</b><span>Capture páginas e gere o conteúdo</span><em>Começar →</em></button><button onClick={()=>setView("saved")}><span className="icon">□</span><b>Minhas pastas</b><span>Turmas e quatro bimestres</span><em>Abrir →</em></button></div></section>}
+  {view==="create"&&<section className="page create-page"><div className="page-heading"><span className="eyebrow">PASSO A PASSO</span><h1>Preparar conteúdo</h1><p>Siga as etapas para gerar um material completo.</p></div>
+   <section className="card"><div className="card-title"><span className="icon">▤</span><div><b>1. Disciplina e turma</b><small>Configuração curricular do material.</small></div></div><label>Segmento<select value={segment} onChange={e=>setSegment(e.target.value)}><option>Ensino Fundamental – Anos Iniciais</option><option>Ensino Fundamental – Anos Finais</option><option>Ensino Médio</option><option>Educação de Jovens e Adultos</option></select></label><label>Disciplina<select value={subject} onChange={e=>setSubject(e.target.value)}>{subjects.map(x=><option key={x}>{x}</option>)}</select></label><label>Ano / série<select value={grade} onChange={e=>setGrade(e.target.value)}>{grades.map(x=><option key={x}>{x}</option>)}</select></label>{subject==="Educação Física"&&<div className="pe-option"><b>Educação Física — formato</b><div className="choice-row"><button className={peMode==="prática"?"active":""} onClick={()=>setPeMode("prática")}>🏃 Atividade prática</button><button className={peMode==="teórica"?"active":""} onClick={()=>setPeMode("teórica")}>▤ Aula teórica</button></div></div>}<div className="lesson-count"><span>Quantas aulas serão ministradas?</span><div>{[1,2,3,4,5,6,8,10].map(n=><button className={lessons===n?"active":""} onClick={()=>setLessons(n)} key={n}>{n}</button>)}</div></div></section>
+   <section className="card capture-card"><div className="camera-hero">●</div><div className="card-title"><span className="icon">▣</span><div><b>2. Capturar ou escolher material</b><small>As imagens serão acumuladas na ordem de envio.</small></div></div><input ref={fileRef} hidden type="file" accept="image/*" multiple onChange={e=>addFiles(e.target.files)}/><button onClick={openCamera}>▣ Abrir câmera</button><button onClick={()=>fileRef.current?.click()}>↥ Escolher arquivos</button><button onClick={clearFiles}>⌫ Limpar todo o material lido</button><button className="screen-btn" onClick={openScreenCapture}>▣ Capturar a tela inteira</button>{previews.length>0&&<div className="thumbs">{previews.map((p,i)=><figure key={`${p.file.name}-${i}`}><img src={p.url} alt={`Imagem ${i+1}`}/><figcaption>Imagem {i+1}</figcaption><button onClick={()=>removeFile(i)}>×</button></figure>)}</div>}<button className="read-btn" disabled={reading||!files.length} onClick={readImages}>{reading?`Lendo imagens... ${ocrProgress}%`:"Ler imagens"}</button></section>
+   <section className="card"><div className="card-title"><span className="icon">≡</span><div><b>3. Texto identificado da imagem / apostila</b><small>Conteúdo integral digitalizado. Revise antes de continuar.</small></div></div><textarea className={expanded?"expanded":""} value={ocrText} onChange={e=>setOcrText(e.target.value)} placeholder="O texto digitalizado aparecerá aqui. Você também pode colar ou corrigir o conteúdo."/>{ocrText&&<button className="more-btn" onClick={()=>setExpanded(!expanded)}>{expanded?"Ler menos":"Ler mais / conferir texto"}</button>}</section>
+   <section className="card curriculum"><div className="card-title"><span className="icon">✓</span><div><b>4. Classificação curricular</b><small>Organização conforme os dados selecionados.</small></div></div><p>{classification}</p></section>
+   <section className="card"><div className="card-title"><span className="icon">✦</span><div><b>5. O que deseja gerar?</b><small>O material usa a classificação e o texto digitalizado.</small></div></div><div className="generate-options"><button onClick={()=>generate("aula")}><span className="icon">▤</span><b>Gerar aula</b><span>{practical?"Plano prático com organização e adaptações":"Planejamento teórico completo"}</span></button><button onClick={()=>generate("prova")}><span className="icon">✓</span><b>Gerar prova</b><span>5 múltipla escolha + 5 dissertativas</span></button></div></section>
+   {generating&&<div className="generating"><span></span><b>Gerando material...</b><p>Organizando conteúdo, BNCC e estrutura pedagógica.</p></div>}
+   {generated&&!generating&&<section className="result-card" id="result"><div className="result-head"><span className="eyebrow">MATERIAL GERADO</span><h2>{generated==="aula"?`Plano de aula — ${subject}`:`Avaliação — ${subject}`}</h2><p>{grade} · {lessons} aula(s)</p></div><textarea className="editable-result" defaultValue={generated==="aula"?lessonText:examText}/><div className="save-location"><label>Turma<input value={className} onChange={e=>setClassName(e.target.value)}/></label><label>Pasta<select value={bimester} onChange={e=>setBimester(Number(e.target.value))}>{[1,2,3,4].map(n=><option value={n} key={n}>{n}º bimestre</option>)}</select></label></div><div className="result-actions multi"><button onClick={saveMaterial}>☆ Salvar na pasta</button><button onClick={()=>navigator.share?.({title:"Aula Clara",url:location.href})}>↗ Compartilhar</button>{generated==="prova"&&<button className="primary" onClick={downloadWord}>↓ Baixar Word</button>}</div></section>}
+  </section>}
+  {view==="saved"&&<section className="page saved-page"><div className="page-heading"><span className="eyebrow">ARQUIVOS SALVOS</span><h1>Turmas e bimestres</h1><p>Abra uma pasta para consultar e editar o conteúdo.</p></div><div className="folder-tabs">{[1,2,3,4].map(n=><button className={folder===n?"active":""} onClick={()=>setFolder(n)} key={n}>□<span>{n}º bimestre</span><small>{saved.filter(x=>x.bimester===n).length} arquivo(s)</small></button>)}</div><div className="saved-list">{saved.filter(x=>x.bimester===folder).map(x=><article key={x.id} onClick={()=>setEditing(x)}><span className="icon">{x.type==="aula"?"▤":"✓"}</span><div><small>{x.className} · {x.type==="aula"?"PLANO":"PROVA"}</small><b>{x.title}</b><span>{x.grade} · {x.createdAt}</span></div><button onClick={e=>{e.stopPropagation();deleteSaved(x.id)}}>×</button></article>)}{!saved.some(x=>x.bimester===folder)&&<div className="empty"><span className="icon">□</span><h2>Pasta vazia</h2><p>Salve um material neste bimestre para ele aparecer aqui.</p></div>}</div></section>}
+  {(cameraOpen||screenOpen)&&<div className="capture-modal"><video ref={videoRef} autoPlay playsInline muted/><div className="capture-controls">{cameraOpen?<><button onClick={()=>captureVideo()}>● Tirar foto</button><button onClick={stopStream}>Concluir</button></>:<><p>Posicione a tela. O painel ficará invisível durante a contagem.</p><button onClick={delayedScreenShot}>▣ Capturar em 3 segundos</button><button onClick={stopStream}>Cancelar</button></>}</div>{countdown!==null&&<div className="countdown">{countdown}</div>}</div>}
+  {editing&&<div className="edit-modal"><div><h2>Editar arquivo</h2><input value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})}/><textarea value={editing.content} onChange={e=>setEditing({...editing,content:e.target.value})}/><footer><button onClick={()=>setEditing(null)}>Cancelar</button><button className="primary" onClick={persistEdit}>Salvar alterações</button></footer></div></div>}
+  <nav className="bottom-nav"><button className={view==="home"?"active":""} onClick={()=>setView("home")}><span>⌂</span>Início</button><button className={view==="create"?"active":""} onClick={()=>setView("create")}><span>＋</span>Criar</button><button className={view==="saved"?"active":""} onClick={()=>setView("saved")}><span>□</span>Pastas</button></nav>{toast&&<div className="toast">✓ {toast}</div>}
+ </main>
 }
