@@ -28,6 +28,10 @@ export default function Home() {
   const [subject, setSubject] = useState("Língua Portuguesa");
   const [grade, setGrade] = useState("8º Ano");
   const [lessons, setLessons] = useState(1);
+  const [questionCount, setQuestionCount] = useState(10);
+  const [difficulty, setDifficulty] = useState("Intermediária");
+  const [schoolName, setSchoolName] = useState("");
+  const [teacherName, setTeacherName] = useState("Lucas");
   const [files, setFiles] = useState<File[]>([]);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<Material | null>(null);
@@ -84,9 +88,18 @@ export default function Home() {
     const item = { id: Date.now(), type: kind, title: kind === "aula" ? title : `Avaliação — ${topic}`, subject, grade, createdAt: new Date().toLocaleDateString("pt-BR") };
     const next = [item, ...saved]; setSaved(next); localStorage.setItem("aula-clara-saved", JSON.stringify(next)); flash("Material salvo no aparelho");
   }
+  function removeSaved(id: number) {
+    const next = saved.filter(item => item.id !== id);
+    setSaved(next); localStorage.setItem("aula-clara-saved", JSON.stringify(next)); flash("Material removido");
+  }
+  async function shareCurrent() {
+    const data = { title: generated === "aula" ? title : `Avaliação — ${subject}`, text: `Material de ${subject} para o ${grade}, criado no Aula Clara.`, url: window.location.href };
+    if (navigator.share) await navigator.share(data).catch(() => undefined);
+    else { await navigator.clipboard.writeText(window.location.href); flash("Link copiado"); }
+  }
   function downloadWord() {
-    const questions = exam.map((q, i) => `<p><b>${i + 1}.</b> ${q.replaceAll("\n", "<br>")}</p><p>&nbsp;</p>`).join("");
-    const html = `<html><head><meta charset="utf-8"><style>@page{margin:2cm}body{font-family:Arial,sans-serif;font-size:11pt;line-height:1}p{margin:0}h1{text-align:center;font-size:14pt}.line{border-bottom:1px solid #000;display:inline-block;width:65%}</style></head><body><h1>AVALIAÇÃO DE ${subject.toUpperCase()}</h1><p>Escola: <span class="line"></span></p><p>Professor(a): <span class="line"></span></p><p>Aluno(a): <span class="line"></span></p><p>Turma: ${grade} &nbsp;&nbsp; Data: ____/____/______</p><br>${questions}<br><h2>Gabarito do professor</h2><p>1. Resposta pessoal coerente com o tema. 2. B. Demais questões: respostas conforme o conteúdo trabalhado.</p></body></html>`;
+    const questions = exam.slice(0, questionCount).map((q, i) => `<p><b>${i + 1}.</b> ${q.replaceAll("\n", "<br>")}</p><p>&nbsp;</p>`).join("");
+    const html = `<html><head><meta charset="utf-8"><style>@page{margin:2cm}body{font-family:Arial,sans-serif;font-size:11pt;line-height:1}p{margin:0}h1{text-align:center;font-size:14pt}.line{border-bottom:1px solid #000;display:inline-block;width:65%}</style></head><body><h1>AVALIAÇÃO DE ${subject.toUpperCase()}</h1><p>Escola: ${schoolName || '<span class="line"></span>'}</p><p>Professor(a): ${teacherName || '<span class="line"></span>'}</p><p>Aluno(a): <span class="line"></span></p><p>Turma: ${grade} &nbsp;&nbsp; Data: ____/____/______</p><p>Nível: ${difficulty}</p><br>${questions}<br><h2>Gabarito do professor</h2><p>1. Resposta pessoal coerente com o tema. 2. B. Demais questões: respostas conforme o conteúdo trabalhado.</p></body></html>`;
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `prova-${subject.toLowerCase().replaceAll(" ", "-")}.doc`; a.click(); URL.revokeObjectURL(url); flash("Prova baixada em formato Word");
   }
@@ -113,6 +126,7 @@ export default function Home() {
         <button onClick={() => {setView("create");setMode("prova")}}><Icon>✓</Icon><b>Gerar prova</b><span>Questões e gabarito em Word</span><em>Começar →</em></button>
       </div>
       <div className="feature-strip"><div><b>BNCC</b><span>Habilidades relacionadas</span></div><div><b>1 toque</b><span>Exportação para Word</span></div><div><b>Local</b><span>Histórico no aparelho</span></div></div>
+      <div className="v2-callout"><span>✦</span><div><b>Seu assistente pedagógico</b><p>Crie, revise, salve, imprima e compartilhe sem sair do celular.</p></div></div>
     </section>}
 
     {view === "create" && <section className="page create-page">
@@ -130,17 +144,18 @@ export default function Home() {
       </section>
       <section className="card"><div className="card-title"><Icon>✦</Icon><div><b>3. Escolha o material</b><small>Você poderá editar antes de salvar ou baixar.</small></div></div>
         {subject === "Educação Física" && <div className="pe-option"><b>Educação Física · formato da aula</b><p>O plano será estruturado como aula prática, com materiais, espaço, segurança, organização e adaptações.</p></div>}
-        <div className="generate-options"><button onClick={() => generate("aula")} className={mode === "aula" ? "selected" : ""}><Icon>▤</Icon><b>Gerar plano de aula</b><span>{lessons} aula(s) · sequência didática completa</span></button><button onClick={() => generate("prova")} className={mode === "prova" ? "selected" : ""}><Icon>✓</Icon><b>Gerar avaliação</b><span>10 questões · gabarito · arquivo Word</span></button></div>
+        <div className="generate-options"><button onClick={() => generate("aula")} className={mode === "aula" ? "selected" : ""}><Icon>▤</Icon><b>Gerar plano de aula</b><span>{lessons} aula(s) · sequência didática completa</span></button><button onClick={() => setMode("prova")} className={mode === "prova" ? "selected" : ""}><Icon>✓</Icon><b>Configurar avaliação</b><span>Questões, gabarito e arquivo Word</span></button></div>
+        {mode === "prova" && <div className="exam-settings"><div><label>Quantidade<select value={questionCount} onChange={e => setQuestionCount(Number(e.target.value))}><option value="5">5 questões</option><option value="8">8 questões</option><option value="10">10 questões</option></select></label><label>Dificuldade<select value={difficulty} onChange={e => setDifficulty(e.target.value)}><option>Básica</option><option>Intermediária</option><option>Avançada</option></select></label></div><label>Nome da escola<input value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="Opcional"/></label><label>Professor(a)<input value={teacherName} onChange={e => setTeacherName(e.target.value)}/></label><button className="create-exam" onClick={() => generate("prova")}>Gerar avaliação personalizada</button></div>}
       </section>
       {generating && <div className="generating"><span></span><b>Organizando seu material...</b><p>Relacionando conteúdo, turma e habilidades pedagógicas.</p></div>}
       {generated && !generating && <section id="result" className="result-card">
         <div className="result-head"><span className="eyebrow">MATERIAL GERADO</span><h2>{generated === "aula" ? title : `Avaliação — ${subject}`}</h2><p>{subject} · {grade} · {lessons} aula(s)</p></div>
-        {generated === "aula" ? <div className="result-body"><h3>Objetivo de aprendizagem</h3><p>{lessonPlan.objective}</p><h3>Habilidades BNCC relacionadas</h3><div className="skills">{lessonPlan.skills.map(s => <span key={s}>{s}</span>)}</div><h3>Recursos necessários</h3><p>{subject === "Educação Física" ? "Cones, bolas, coletes, cronômetro, quadra ou espaço livre e água para hidratação." : "Apostila, quadro, caderno, cartões de atividade e recursos visuais disponíveis."}</p><h3>Desenvolvimento</h3><ol>{lessonPlan.steps.map((s,i) => <li key={s}><b>{i+1}</b><span>{s}</span></li>)}</ol><h3>Avaliação</h3><p>Observação da participação, dos registros e da capacidade de relacionar o conteúdo às situações propostas.</p><aside><b>Dica do professor</b><p>Reserve os cinco minutos finais para uma síntese feita pelos próprios estudantes.</p></aside></div> : <div className="result-body exam"><div className="school-lines"><span>Escola: ___________________________</span><span>Aluno(a): _________________________</span></div>{exam.map((q,i) => <div key={q}><b>{i+1}.</b><p>{q}</p></div>)}<details><summary>Ver gabarito do professor</summary><p>Questão 2: alternativa B. Questões abertas: avaliar coerência, domínio do conteúdo e capacidade de argumentação.</p></details></div>}
-        <div className="result-actions"><button onClick={() => saveCurrent(generated)}>☆ Salvar</button>{generated === "prova" && <button className="primary" onClick={downloadWord}>↓ Baixar em Word</button>}</div>
+        {generated === "aula" ? <div className="result-body" contentEditable suppressContentEditableWarning><h3>Objetivo de aprendizagem</h3><p>{lessonPlan.objective}</p><h3>Habilidades BNCC relacionadas</h3><div className="skills">{lessonPlan.skills.map(s => <span key={s}>{s}</span>)}</div><h3>Recursos necessários</h3><p>{subject === "Educação Física" ? "Cones, bolas, coletes, cronômetro, quadra ou espaço livre e água para hidratação." : "Apostila, quadro, caderno, cartões de atividade e recursos visuais disponíveis."}</p><h3>Desenvolvimento</h3><ol>{lessonPlan.steps.map((s,i) => <li key={s}><b>{i+1}</b><span>{s}</span></li>)}</ol><h3>Avaliação</h3><p>Observação da participação, dos registros e da capacidade de relacionar o conteúdo às situações propostas.</p><aside><b>Dica do professor</b><p>Reserve os cinco minutos finais para uma síntese feita pelos próprios estudantes.</p></aside></div> : <div className="result-body exam" contentEditable suppressContentEditableWarning><div className="school-lines"><span>Escola: {schoolName || "___________________________"}</span><span>Professor(a): {teacherName}</span><span>Aluno(a): _________________________</span><span>Nível: {difficulty}</span></div>{exam.slice(0, questionCount).map((q,i) => <div key={q}><b>{i+1}.</b><p>{q}</p></div>)}<details><summary>Ver gabarito do professor</summary><p>Questão 2: alternativa B. Questões abertas: avaliar coerência, domínio do conteúdo e capacidade de argumentação.</p></details></div>}
+        <p className="edit-hint">✎ Toque no texto acima para fazer ajustes.</p><div className="result-actions multi"><button onClick={() => saveCurrent(generated)}>☆ Salvar</button><button onClick={shareCurrent}>↗ Compartilhar</button><button onClick={() => window.print()}>⌑ Imprimir</button>{generated === "prova" && <button className="primary" onClick={downloadWord}>↓ Baixar Word</button>}</div>
       </section>}
     </section>}
 
-    {view === "saved" && <section className="page saved-page"><div className="page-heading"><span className="eyebrow">BIBLIOTECA</span><h1>Materiais salvos</h1><p>Seus planos e avaliações ficam guardados neste aparelho.</p></div>{saved.length === 0 ? <div className="empty"><Icon>□</Icon><h2>Nenhum material salvo</h2><p>Gere uma aula ou prova e toque em “Salvar”.</p><button className="primary" onClick={() => setView("create")}>Criar material</button></div> : <div className="saved-list">{saved.map(item => <article key={item.id}><Icon>{item.type === "aula" ? "▤" : "✓"}</Icon><div><small>{item.type === "aula" ? "PLANO DE AULA" : "AVALIAÇÃO"}</small><b>{item.title}</b><span>{item.subject} · {item.grade} · {item.createdAt}</span></div><button aria-label="Mais opções">⋮</button></article>)}</div>}</section>}
+    {view === "saved" && <section className="page saved-page"><div className="page-heading"><span className="eyebrow">BIBLIOTECA</span><h1>Materiais salvos</h1><p>Seus planos e avaliações ficam guardados neste aparelho.</p></div>{saved.length === 0 ? <div className="empty"><Icon>□</Icon><h2>Nenhum material salvo</h2><p>Gere uma aula ou prova e toque em “Salvar”.</p><button className="primary" onClick={() => setView("create")}>Criar material</button></div> : <div className="saved-list">{saved.map(item => <article key={item.id}><Icon>{item.type === "aula" ? "▤" : "✓"}</Icon><div><small>{item.type === "aula" ? "PLANO DE AULA" : "AVALIAÇÃO"}</small><b>{item.title}</b><span>{item.subject} · {item.grade} · {item.createdAt}</span></div><button onClick={() => removeSaved(item.id)} aria-label="Excluir material">×</button></article>)}</div>}</section>}
 
     <nav className="bottom-nav"><button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><span>⌂</span>Início</button><button className={view === "create" ? "active" : ""} onClick={() => setView("create")}><span>＋</span>Criar</button><button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>□</span>Salvos</button></nav>
     {toast && <div className="toast">✓ {toast}</div>}
