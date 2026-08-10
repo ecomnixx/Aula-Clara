@@ -1,11 +1,21 @@
-<div align="center">
+# Aula Clara
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Aplicativo web instalável para professores criarem planos de aula e avaliações a partir de materiais didáticos.
 
-  <h1>Built with AI Studio</h2>
+## Recursos
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+- seleção de disciplina, turma e quantidade de aulas;
+- importação de imagens e PDF;
+- campo de transcrição editável;
+- planos adaptados à disciplina e à Educação Física prática;
+- avaliações com 10 questões e gabarito;
+- exportação para Word em Arial 11 e espaçamento simples;
+- biblioteca local de materiais;
+- instalação no smartphone como PWA.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Desenvolvimento
 
-</div>
+```bash
+npm install
+npm run dev
+```
