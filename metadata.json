@@ -1,0 +1,8 @@
+{
+  "name": "Remix Gerador Pedagógico BNCC",
+  "description": "Gerador de planos de aula, atividades, atividades práticas e provas alinhados à BNCC com leitura de imagens e extração de texto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

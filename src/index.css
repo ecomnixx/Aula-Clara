@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-auguste-slate: #3d5a6c;
+  --color-auguste-slate-dark: #2c4251;
+  --color-auguste-slate-light: #527388;
+  --color-auguste-cream: #f7f5f0;
+  --color-auguste-cream-dark: #efece6;
+  --color-auguste-sand: #dfd5c6;
+  --color-auguste-sand-dark: #c8bba8;
+  --color-auguste-tan: #c6a992;
+  --color-auguste-tan-dark: #a88b74;
+  --color-auguste-tan-light: #ece1d7;
+  --color-auguste-text: #1e2d38;
+  --color-auguste-muted: #5a6b78;
+}
+
