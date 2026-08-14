@@ -27,6 +27,8 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   assert.match(page, /GABARITO DO PROFESSOR/);
   assert.match(page, /\[1,2,3,4\]/);
   assert.match(page, /foto-camera-/);
+  assert.match(page, /imagem enviada/);
+  assert.match(page, /✓ Enviada/);
   assert.match(page, /cleanOcrText/);
   assert.match(page, /Conteúdo Original Escaneado/);
   assert.match(page, /COMPETÊNCIAS SOCIOEMOCIONAIS/);
@@ -82,11 +84,18 @@ test("PWA está instalável como aplicativo Android", async () => {
   assert.match(sw, /skipWaiting/);
   assert.match(sw, /clients\.claim/);
   assert.match(auth, /beforeinstallprompt/);
-  assert.match(auth, /Instalar aplicativo neste dispositivo/);
+  assert.match(auth, /Instalar versão web neste dispositivo/);
   assert.match(auth, /APP_INSTALL_URL/);
-  assert.match(auth, /Abrir link oficial/);
+  assert.match(auth, /Abrir página de download/);
   assert.match(auth, /Copiar link/);
   assert.match(auth, /Compartilhar/);
+  assert.match(auth, /baixar\.html/);
+  const downloadPage = await read("public/baixar.html");
+  const downloadManifest = JSON.parse(await read("public/apk/manifest.json"));
+  assert.match(downloadPage, /Baixar aplicativo para Android/);
+  assert.match(downloadPage, /application\/vnd\.android\.package-archive/);
+  assert.ok(downloadManifest.parts.length > 1);
+  assert.ok(downloadManifest.bytes > 900000);
 });
 
 test("banco usa RLS e trilha de auditoria para acessos", async () => {

@@ -10,6 +10,7 @@ import { isGrantExpired, remainingDays, type AccessGrant } from "./access-manage
 
 const MASTER_EMAIL = "ecomnixx@gmail.com";
 const APP_INSTALL_URL = "https://aulaclara-docente.vercel.app/";
+const APP_DOWNLOAD_URL = "https://aulaclara-docente.vercel.app/baixar.html";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 export default function AuthGate({ children }: { children: ReactNode }) {
@@ -113,12 +114,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   async function copyInstallLink() {
-    try { await navigator.clipboard.writeText(APP_INSTALL_URL); setInstallLinkMessage("Link copiado. Agora você pode enviá-lo ao professor."); }
-    catch { setInstallLinkMessage(`Copie este endereço: ${APP_INSTALL_URL}`); }
+    try { await navigator.clipboard.writeText(APP_DOWNLOAD_URL); setInstallLinkMessage("Link de download copiado. Agora você pode enviá-lo ao professor."); }
+    catch { setInstallLinkMessage(`Copie este endereço: ${APP_DOWNLOAD_URL}`); }
   }
 
   async function shareInstallLink() {
-    if (navigator.share) await navigator.share({ title: "Instalar Aula Clara", text: "Abra este link no Google Chrome para instalar o Aula Clara.", url: APP_INSTALL_URL });
+    if (navigator.share) await navigator.share({ title: "Baixar Aula Clara", text: "Baixe o aplicativo Aula Clara para Android.", url: APP_DOWNLOAD_URL });
     else await copyInstallLink();
   }
 
@@ -170,10 +171,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <button className="link-button" onClick={() => supabase.auth.signOut()}>Sair deste aparelho</button>
     </section></div>}
     {installOpen && <div className="admin-backdrop" onClick={() => setInstallOpen(false)}><section className="account-panel install-panel" onClick={event => event.stopPropagation()}>
-      <button className="panel-close" onClick={() => setInstallOpen(false)}>×</button><span className="install-symbol">↓</span><h2>Downloads e atualizações</h2><p>Use o link oficial abaixo para abrir e instalar o Aula Clara no dispositivo.</p>
-      <a className="official-app-link" href={APP_INSTALL_URL} target="_blank" rel="noreferrer">{APP_INSTALL_URL}</a>
-      <button className="login-primary install-app-button" onClick={() => void installApp()}>Instalar aplicativo neste dispositivo</button>
-      <div className="install-link-actions"><a href={APP_INSTALL_URL} target="_blank" rel="noreferrer">Abrir link oficial</a><button onClick={() => void copyInstallLink()}>Copiar link</button><button onClick={() => void shareInstallLink()}>Compartilhar</button></div>
+      <button className="panel-close" onClick={() => setInstallOpen(false)}>×</button><span className="install-symbol">↓</span><h2>Downloads e atualizações</h2><p>Baixe o aplicativo Android ou instale a versão web diretamente no aparelho.</p>
+      <a className="official-app-link" href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">{APP_DOWNLOAD_URL}</a>
+      <a className="login-primary install-app-button android-download-button" href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">Baixar aplicativo para Android</a>
+      <button className="login-primary" onClick={() => void installApp()}>Instalar versão web neste dispositivo</button>
+      <div className="install-link-actions"><a href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">Abrir página de download</a><button onClick={() => void copyInstallLink()}>Copiar link</button><button onClick={() => void shareInstallLink()}>Compartilhar</button></div>
       {installLinkMessage && <div className="auth-message">{installLinkMessage}</div>}
       {installHelp && <div className="install-help">{window.matchMedia("(display-mode: standalone)").matches ? <><b>O aplicativo já está instalado.</b><br/>As atualizações são recebidas automaticamente quando você abrir o Aula Clara.</> : <>Abra este endereço no <b>Google Chrome</b>, toque no menu ⋮ e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</>}</div>}
       <small>Versão atual: Aula Clara 3.1 · atualização automática</small>

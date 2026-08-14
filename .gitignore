@@ -45,3 +45,5 @@ dev-error.log
 /android/android-keystore
 /android/.signing.env
 /android/*.jks
+/public/aula-clara-android.apk
+/public/apk/
