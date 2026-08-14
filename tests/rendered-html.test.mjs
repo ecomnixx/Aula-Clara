@@ -9,8 +9,8 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   const page = await read("app/page.tsx");
   for (const label of [
     "Abrir câmera",
-    "Escolher na galeria",
-    "Limpar todo o material lido",
+    "Escolher arquivos",
+    "Limpar material lido",
     "Capturar a tela inteira",
     "Ler imagens",
     "Gerar aula",
@@ -41,6 +41,7 @@ test("menu lateral simplificado cobre as áreas essenciais e a área master", as
   ]) assert.match(page, new RegExp(label));
   assert.match(page, /access\.isMaster/);
   assert.match(page, /notification-bell/);
+  assert.match(page, /Downloads e atualizações/);
   assert.match(page, /pendingRegistrations/);
 });
 

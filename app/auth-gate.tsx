@@ -26,6 +26,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [pendingRegistrations, setPendingRegistrations] = useState(0);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installHelp, setInstallHelp] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
@@ -102,7 +103,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   async function installApp() {
-    if (!installPrompt) { setInstallHelp(true); return; }
+    const alreadyInstalled = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    if (alreadyInstalled || !installPrompt) { setInstallHelp(true); return; }
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     if (choice.outcome === "accepted") setInstallPrompt(null);
@@ -145,18 +147,21 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     <button className="login-primary" onClick={() => supabase.auth.signOut()}>Usar outro e-mail</button>
   </section></main>;
 
-  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
+  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), openInstall: () => { setInstallHelp(false); setInstallOpen(true); }, userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
     {daysLeft !== null && daysLeft <= 7 && <div className="expiry-banner">Seu acesso termina em <b>{daysLeft} dia(s)</b>. Fale com o administrador para renovar.</div>}
-    {installPrompt && <aside className="pwa-install-banner"><span>▣</span><div><b>Instale o Aula Clara</b><small>Use como aplicativo no seu celular.</small></div><button onClick={() => void installApp()}>Instalar</button></aside>}
     {children}
     {accountOpen && <div className="admin-backdrop" onClick={() => setAccountOpen(false)}><section className="account-panel" onClick={e => e.stopPropagation()}>
       <button className="panel-close" onClick={() => setAccountOpen(false)}>×</button><h2>Minha conta</h2>
       <p><b>{grant?.display_name || "Professor(a)"}</b><br />{session.user.email}</p>
       <div className="access-status">{grant?.lifetime ? "Acesso vitalício" : `${daysLeft} dia(s) restantes`}</div>
-      <button className="login-primary install-app-button" onClick={() => void installApp()}>↓ Instalar aplicativo neste dispositivo</button>
-      {installHelp && <div className="install-help">No celular, abra o menu do navegador e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar aplicativo</b>.</div>}
       {master && <button className="login-primary" onClick={() => { setAccountOpen(false); setAdminOpen(true); }}>Gerenciar acessos</button>}
       <button className="link-button" onClick={() => supabase.auth.signOut()}>Sair deste aparelho</button>
+    </section></div>}
+    {installOpen && <div className="admin-backdrop" onClick={() => setInstallOpen(false)}><section className="account-panel install-panel" onClick={event => event.stopPropagation()}>
+      <button className="panel-close" onClick={() => setInstallOpen(false)}>×</button><span className="install-symbol">↓</span><h2>Downloads e atualizações</h2><p>Instale o Aula Clara na tela inicial e use como um aplicativo.</p>
+      <button className="login-primary install-app-button" onClick={() => void installApp()}>Instalar aplicativo neste dispositivo</button>
+      {installHelp && <div className="install-help">{window.matchMedia("(display-mode: standalone)").matches ? <><b>O aplicativo já está instalado.</b><br/>As atualizações são recebidas automaticamente quando você abrir o Aula Clara.</> : <>Abra este endereço no <b>Google Chrome</b>, toque no menu ⋮ e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</>}</div>}
+      <small>Versão atual: Aula Clara 3.1 · atualização automática</small>
     </section></div>}
     {adminOpen && <AccessManager onClose={() => setAdminOpen(false)} />}
   </AccessContext.Provider>;
