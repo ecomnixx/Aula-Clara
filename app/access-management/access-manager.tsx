@@ -35,7 +35,7 @@ export default function AccessManager({ onClose }: Props) {
     setGrants(loaded);
     setDrafts(current => {
       const next = { ...current };
-      for (const item of loaded) next[item.email] ??= { amount: 1, exactDays: remainingDays(item) ?? 30 };
+      for (const item of loaded) next[item.email] = { amount: current[item.email]?.amount ?? 1, exactDays: remainingDays(item) ?? 30 };
       return next;
     });
     setLoading(false);
@@ -87,6 +87,8 @@ export default function AccessManager({ onClose }: Props) {
     const expiresAt = new Date(Math.max(now, base + direction * amount * 86400000)).toISOString();
     const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
     if (error) { setMessage(error.message); return; }
+    setGrants(current => current.map(grant => grant.email === item.email ? { ...grant, lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString() } : grant));
+    setDrafts(current => ({ ...current, [item.email]: { amount: current[item.email]?.amount ?? 1, exactDays: Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000)) } }));
     await audit(item.email, direction > 0 ? "days_added" : "days_removed", direction * amount);
     setMessage(`${amount} dia(s) ${direction > 0 ? "adicionado(s)" : "retirado(s)"} de ${item.display_name || item.email}.`);
     await loadGrants();
@@ -97,6 +99,8 @@ export default function AccessManager({ onClose }: Props) {
     const expiresAt = new Date(Date.now() + exactDays * 86400000).toISOString();
     const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
     if (error) { setMessage(error.message); return; }
+    setGrants(current => current.map(grant => grant.email === item.email ? { ...grant, lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString() } : grant));
+    setDrafts(current => ({ ...current, [item.email]: { amount: current[item.email]?.amount ?? 1, exactDays } }));
     await audit(item.email, "deadline_replaced", exactDays);
     setMessage(`Novo prazo de ${exactDays} dia(s) salvo.`);
     await loadGrants();

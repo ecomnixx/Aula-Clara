@@ -9,6 +9,7 @@ import { AccessContext } from "./access-management/access-context";
 import { isGrantExpired, remainingDays, type AccessGrant } from "./access-management/types";
 
 const MASTER_EMAIL = "ecomnixx@gmail.com";
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 export default function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -23,6 +24,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [pendingRegistrations, setPendingRegistrations] = useState(0);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installHelp, setInstallHelp] = useState(false);
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
@@ -48,6 +51,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", refreshOnFocus);
     return () => { document.removeEventListener("visibilitychange", refreshOnFocus); void supabase.removeChannel(channel); };
   }, [loadGrant, session]);
+
+  useEffect(() => {
+    const capturePrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
+    const installed = () => { setInstallPrompt(null); setInstallHelp(false); };
+    window.addEventListener("beforeinstallprompt", capturePrompt);
+    window.addEventListener("appinstalled", installed);
+    return () => { window.removeEventListener("beforeinstallprompt", capturePrompt); window.removeEventListener("appinstalled", installed); };
+  }, []);
 
   const daysLeft = useMemo(() => remainingDays(grant), [grant]);
   const expired = isGrantExpired(grant);
@@ -90,6 +101,13 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     if (error) setMessage("O acesso Google ainda precisa ser habilitado pelo administrador. Use e-mail e senha por enquanto.");
   }
 
+  async function installApp() {
+    if (!installPrompt) { setInstallHelp(true); return; }
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") setInstallPrompt(null);
+  }
+
   if (loading) return <div className="auth-loading"><span></span><b>Abrindo Aula Clara...</b></div>;
 
   if (!session) return <main className="login-page">
@@ -129,11 +147,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
     {daysLeft !== null && daysLeft <= 7 && <div className="expiry-banner">Seu acesso termina em <b>{daysLeft} dia(s)</b>. Fale com o administrador para renovar.</div>}
+    {installPrompt && <aside className="pwa-install-banner"><span>▣</span><div><b>Instale o Aula Clara</b><small>Use como aplicativo no seu celular.</small></div><button onClick={() => void installApp()}>Instalar</button></aside>}
     {children}
     {accountOpen && <div className="admin-backdrop" onClick={() => setAccountOpen(false)}><section className="account-panel" onClick={e => e.stopPropagation()}>
       <button className="panel-close" onClick={() => setAccountOpen(false)}>×</button><h2>Minha conta</h2>
       <p><b>{grant?.display_name || "Professor(a)"}</b><br />{session.user.email}</p>
       <div className="access-status">{grant?.lifetime ? "Acesso vitalício" : `${daysLeft} dia(s) restantes`}</div>
+      <button className="login-primary install-app-button" onClick={() => void installApp()}>↓ Instalar aplicativo neste dispositivo</button>
+      {installHelp && <div className="install-help">No celular, abra o menu do navegador e toque em <b>Adicionar à tela inicial</b> ou <b>Instalar aplicativo</b>.</div>}
       {master && <button className="login-primary" onClick={() => { setAccountOpen(false); setAdminOpen(true); }}>Gerenciar acessos</button>}
       <button className="link-button" onClick={() => supabase.auth.signOut()}>Sair deste aparelho</button>
     </section></div>}

@@ -66,6 +66,7 @@ test("gerenciamento isolado permite pesquisar e controlar dias", async () => {
 test("PWA está instalável como aplicativo Android", async () => {
   const manifest = JSON.parse(await read("public/manifest.webmanifest"));
   const sw = await read("public/sw.js");
+  const auth = await read("app/auth-gate.tsx");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
   assert.equal(manifest.scope, "/");
@@ -73,6 +74,8 @@ test("PWA está instalável como aplicativo Android", async () => {
   assert.ok(manifest.icons.every((icon) => icon.purpose.includes("maskable")));
   assert.match(sw, /skipWaiting/);
   assert.match(sw, /clients\.claim/);
+  assert.match(auth, /beforeinstallprompt/);
+  assert.match(auth, /Instalar aplicativo neste dispositivo/);
 });
 
 test("banco usa RLS e trilha de auditoria para acessos", async () => {
