@@ -45,6 +45,10 @@ test("gerenciamento isolado permite pesquisar e controlar dias", async () => {
   const manager = await read("app/access-management/access-manager.tsx");
   const context = await read("app/access-management/access-context.tsx");
   assert.match(manager, /Buscar por nome ou e-mail/);
+  assert.match(manager, /Pasta de acessos/);
+  assert.match(manager, /Todos/);
+  assert.match(manager, /Novos/);
+  assert.match(manager, /Restam/);
   assert.match(manager, /Cadastrar e liberar acesso/);
   assert.match(manager, /changeDays\(item, -1\)/);
   assert.match(manager, /changeDays\(item, 1\)/);

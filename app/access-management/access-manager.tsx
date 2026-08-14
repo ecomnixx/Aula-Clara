@@ -6,6 +6,7 @@ import { accessTimestamp, remainingDays, type AccessGrant } from "./types";
 
 type Props = { onClose: () => void };
 type Drafts = Record<string, { amount: number; exactDays: number }>;
+type AccessFolder = "all" | "new" | "active" | "blocked";
 
 function formatDeadline(value: string | null) {
   if (!value) return "Sem prazo definido";
@@ -21,6 +22,7 @@ export default function AccessManager({ onClose }: Props) {
   const [drafts, setDrafts] = useState<Drafts>({});
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [folder, setFolder] = useState<AccessFolder>("all");
 
   const loadGrants = useCallback(async () => {
     setLoading(true);
@@ -49,9 +51,12 @@ export default function AccessManager({ onClose }: Props) {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
-    if (!term) return grants;
-    return grants.filter(item => `${item.display_name ?? ""} ${item.email}`.toLocaleLowerCase("pt-BR").includes(term));
-  }, [grants, search]);
+    return grants.filter(item => {
+      const matchesSearch = !term || `${item.display_name ?? ""} ${item.email}`.toLocaleLowerCase("pt-BR").includes(term);
+      const matchesFolder = folder === "all" || (folder === "new" ? !item.admin_reviewed_at && item.role !== "master" : item.status === folder);
+      return matchesSearch && matchesFolder;
+    });
+  }, [folder, grants, search]);
 
   async function audit(email: string, action: string, delta = 0) {
     await supabase.from("access_events").insert({ access_email: email, action, days_delta: delta });
@@ -139,12 +144,20 @@ export default function AccessManager({ onClose }: Props) {
         </div>
       </section>
 
+      <section className="access-folder" aria-labelledby="access-folder-title">
+      <div className="folder-heading"><span className="section-icon">□</span><div><h3 id="access-folder-title">Pasta de acessos</h3><p>Consulte todos os professores cadastrados e gerencie o tempo de uso.</p></div></div>
+      <div className="access-folder-tabs" role="tablist" aria-label="Filtrar acessos">
+        <button className={folder === "all" ? "active" : ""} onClick={() => setFolder("all")}>Todos <span>{grants.length}</span></button>
+        <button className={folder === "new" ? "active" : ""} onClick={() => setFolder("new")}>Novos <span>{grants.filter(item => !item.admin_reviewed_at && item.role !== "master").length}</span></button>
+        <button className={folder === "active" ? "active" : ""} onClick={() => setFolder("active")}>Ativos <span>{grants.filter(item => item.status === "active").length}</span></button>
+        <button className={folder === "blocked" ? "active" : ""} onClick={() => setFolder("blocked")}>Pausados <span>{grants.filter(item => item.status === "blocked").length}</span></button>
+      </div>
       <div className="access-tools">
         <label className="access-search"><span aria-hidden="true">⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome ou e-mail" aria-label="Buscar por nome ou e-mail" /></label>
         <button className="refresh-access" onClick={() => void loadGrants()} disabled={loading}><span aria-hidden="true">↻</span>{loading ? "Atualizando..." : "Atualizar usuários"}</button>
       </div>
 
-      <div className="access-summary"><b>{filtered.length}</b> e-mail(s) encontrado(s)<span>{grants.filter(item => item.status === "active").length} ativos</span></div>
+      <div className="access-summary"><b>{filtered.length}</b> acesso(s) nesta pasta<span>Pesquise por nome ou e-mail</span></div>
       <div className="grant-list">
         {loading && grants.length === 0 && <div className="access-empty">Carregando usuários...</div>}
         {!loading && filtered.map(item => <article key={item.email} className={`${item.status === "blocked" ? "grant-paused" : ""} ${!item.admin_reviewed_at && item.role !== "master" ? "grant-new" : ""}`}>
@@ -155,6 +168,7 @@ export default function AccessManager({ onClose }: Props) {
             <label className="control-input"><span>Quantidade para adicionar ou retirar</span><input type="number" min="1" value={drafts[item.email]?.amount ?? 1} onChange={event => setDraft(item.email, "amount", Number(event.target.value))} /></label>
             <div className="adjust-buttons"><button onClick={() => void changeDays(item, -1)}>− Retirar</button><button className="add-days" onClick={() => void changeDays(item, 1)}>＋ Adicionar</button></div>
             <label className="control-input exact-days"><span>Definir prazo exato em dias</span><input type="number" min="1" value={drafts[item.email]?.exactDays ?? 1} onChange={event => setDraft(item.email, "exactDays", Number(event.target.value))} /></label>
+            <div className="deadline-preview">Após salvar: <b>{drafts[item.email]?.exactDays ?? 1} dias restantes</b></div>
             <button className="save-deadline" onClick={() => void saveExactDeadline(item)}>Salvar novo prazo</button>
             <div className="secondary-actions"><button onClick={() => void toggleBlock(item)}>{item.status === "active" ? "Pausar acesso" : "Reativar acesso"}</button><button className="danger" onClick={() => void removeAccess(item)}>Remover</button></div>
             {!item.admin_reviewed_at && <button className="keep-trial" onClick={() => void keepTrial(item)}>Manter teste de 15 dias</button>}
@@ -162,6 +176,7 @@ export default function AccessManager({ onClose }: Props) {
         </article>)}
         {!loading && filtered.length === 0 && <div className="access-empty"><span>⌕</span><b>Nenhum acesso encontrado</b><small>Revise o nome ou e-mail pesquisado.</small></div>}
       </div>
+      </section>
       {message && <div className="auth-message floating-message" role="status">{message}</div>}
     </section>
   </div>;
