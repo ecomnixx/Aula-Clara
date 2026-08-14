@@ -12,6 +12,14 @@ const MASTER_EMAIL = "ecomnixx@gmail.com";
 const APP_INSTALL_URL = "https://aulaclara-docente.vercel.app/";
 const APP_DOWNLOAD_URL = "https://aulaclara-docente.vercel.app/baixar.html";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
+const SESSION_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(request: PromiseLike<T>, milliseconds = SESSION_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error("Tempo de conexão excedido")), milliseconds)),
+  ]);
+}
 
 export default function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -30,19 +38,48 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [installHelp, setInstallHelp] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [installLinkMessage, setInstallLinkMessage] = useState("");
+  const [connectionError, setConnectionError] = useState(false);
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
-    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at,admin_reviewed_at").eq("email", activeSession.user.email).maybeSingle();
-    setGrant((data as AccessGrant | null) ?? null);
-    if (data) void supabase.rpc("touch_current_access");
-    setLoading(false);
+    try {
+      const { data, error } = await withTimeout(supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at,admin_reviewed_at").eq("email", activeSession.user.email).maybeSingle());
+      if (error) throw error;
+      setConnectionError(false);
+      setGrant((data as AccessGrant | null) ?? null);
+      if (data) void supabase.rpc("touch_current_access");
+    } catch (error) {
+      console.error("[Aula Clara] Falha ao consultar o acesso", error);
+      setConnectionError(true);
+      setMessage("Não foi possível confirmar seu acesso. Verifique a internet e tente novamente.");
+      setGrant(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); loadGrant(data.session); });
+    let active = true;
+    const watchdog = window.setTimeout(() => {
+      if (!active) return;
+      console.error("[Aula Clara] A abertura excedeu o tempo limite");
+      setConnectionError(true);
+      setMessage("A conexão demorou mais que o esperado. Tente entrar novamente.");
+      setLoading(false);
+    }, SESSION_TIMEOUT_MS + 1000);
+    void withTimeout(supabase.auth.getSession()).then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      void loadGrant(data.session);
+    }).catch(error => {
+      if (!active) return;
+      console.error("[Aula Clara] Falha ao restaurar a sessão", error);
+      setMessage("Não foi possível restaurar a sessão. Entre novamente para continuar.");
+      setSession(null);
+      setLoading(false);
+    });
     const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); loadGrant(next); });
-    return () => data.subscription.unsubscribe();
+    return () => { active = false; window.clearTimeout(watchdog); data.subscription.unsubscribe(); };
   }, [loadGrant]);
 
   useEffect(() => {
@@ -152,6 +189,13 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <footer>Planejamento, avaliações e organização em um só lugar.</footer>
     </section>
   </main>;
+
+  if (connectionError) return <main className="login-page"><section className="login-card access-blocked">
+    <div className="login-logo">A</div><h1>Não foi possível conectar</h1>
+    <p>O Aula Clara não conseguiu confirmar sua sessão. Verifique se o aparelho está conectado à internet.</p>
+    <button className="login-primary" onClick={() => location.reload()}>Tentar novamente</button>
+    <button className="link-button" onClick={() => supabase.auth.signOut()}>Entrar com outro e-mail</button>
+  </section></main>;
 
   if (!allowed) return <main className="login-page"><section className="login-card access-blocked">
     <div className="login-logo">A</div><h1>{grant?.status === "blocked" ? "Acesso pausado" : expired ? "Período encerrado" : "Aguardando liberação"}</h1>

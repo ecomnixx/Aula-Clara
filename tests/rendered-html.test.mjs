@@ -84,6 +84,9 @@ test("PWA está instalável como aplicativo Android", async () => {
   assert.match(sw, /skipWaiting/);
   assert.match(sw, /clients\.claim/);
   assert.match(auth, /beforeinstallprompt/);
+  assert.match(auth, /SESSION_TIMEOUT_MS/);
+  assert.match(auth, /Não foi possível conectar/);
+  assert.match(auth, /Tentar novamente/);
   assert.match(auth, /Instalar versão web neste dispositivo/);
   assert.match(auth, /APP_INSTALL_URL/);
   assert.match(auth, /Abrir página de download/);
