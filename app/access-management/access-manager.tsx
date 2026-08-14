@@ -26,7 +26,7 @@ export default function AccessManager({ onClose }: Props) {
     setLoading(true);
     const { data, error } = await supabase
       .from("access_grants")
-      .select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at")
+      .select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at,admin_reviewed_at")
       .order("created_at", { ascending: false });
     if (error) setMessage(error.message);
     const loaded = (data as AccessGrant[]) || [];
@@ -62,7 +62,7 @@ export default function AccessManager({ onClose }: Props) {
     if (!normalizedEmail || !normalizedEmail.includes("@")) { setMessage("Informe um e-mail válido."); return; }
     const safeDays = Math.max(1, Math.floor(days || 1));
     const expiresAt = new Date(Date.now() + safeDays * 86400000).toISOString();
-    const { error } = await supabase.from("access_grants").upsert({ email: normalizedEmail, display_name: newName.trim() || null, role: "client", status: "active", lifetime: false, expires_at: expiresAt, updated_at: new Date().toISOString() });
+    const { error } = await supabase.from("access_grants").upsert({ email: normalizedEmail, display_name: newName.trim() || null, role: "client", status: "active", lifetime: false, expires_at: expiresAt, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     if (error) { setMessage(error.message); return; }
     await audit(normalizedEmail, "access_created", safeDays);
     setMessage(`Acesso liberado por ${safeDays} dias.`);
@@ -80,7 +80,7 @@ export default function AccessManager({ onClose }: Props) {
     const current = item.expires_at ? new Date(item.expires_at).getTime() : now;
     const base = direction > 0 ? Math.max(current, now) : current;
     const expiresAt = new Date(Math.max(now, base + direction * amount * 86400000)).toISOString();
-    const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, updated_at: new Date().toISOString() }).eq("email", item.email);
+    const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
     if (error) { setMessage(error.message); return; }
     await audit(item.email, direction > 0 ? "days_added" : "days_removed", direction * amount);
     setMessage(`${amount} dia(s) ${direction > 0 ? "adicionado(s)" : "retirado(s)"} de ${item.display_name || item.email}.`);
@@ -90,7 +90,7 @@ export default function AccessManager({ onClose }: Props) {
   async function saveExactDeadline(item: AccessGrant) {
     const exactDays = drafts[item.email]?.exactDays ?? 1;
     const expiresAt = new Date(Date.now() + exactDays * 86400000).toISOString();
-    const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, updated_at: new Date().toISOString() }).eq("email", item.email);
+    const { error } = await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: expiresAt, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
     if (error) { setMessage(error.message); return; }
     await audit(item.email, "deadline_replaced", exactDays);
     setMessage(`Novo prazo de ${exactDays} dia(s) salvo.`);
@@ -99,7 +99,7 @@ export default function AccessManager({ onClose }: Props) {
 
   async function toggleBlock(item: AccessGrant) {
     const nextStatus = item.status === "active" ? "blocked" : "active";
-    const { error } = await supabase.from("access_grants").update({ status: nextStatus, updated_at: new Date().toISOString() }).eq("email", item.email);
+    const { error } = await supabase.from("access_grants").update({ status: nextStatus, admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
     if (error) { setMessage(error.message); return; }
     await audit(item.email, nextStatus === "active" ? "access_reactivated" : "access_paused");
     await loadGrants();
@@ -111,6 +111,14 @@ export default function AccessManager({ onClose }: Props) {
     const { error } = await supabase.from("access_grants").delete().eq("email", item.email);
     if (error) { setMessage(error.message); return; }
     setMessage("Acesso removido.");
+    await loadGrants();
+  }
+
+  async function keepTrial(item: AccessGrant) {
+    const { error } = await supabase.from("access_grants").update({ admin_reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", item.email);
+    if (error) { setMessage(error.message); return; }
+    await audit(item.email, "trial_reviewed");
+    setMessage(`Teste de ${item.display_name || item.email} mantido.`);
     await loadGrants();
   }
 
@@ -139,7 +147,8 @@ export default function AccessManager({ onClose }: Props) {
       <div className="access-summary"><b>{filtered.length}</b> e-mail(s) encontrado(s)<span>{grants.filter(item => item.status === "active").length} ativos</span></div>
       <div className="grant-list">
         {loading && grants.length === 0 && <div className="access-empty">Carregando usuários...</div>}
-        {!loading && filtered.map(item => <article key={item.email} className={item.status === "blocked" ? "grant-paused" : ""}>
+        {!loading && filtered.map(item => <article key={item.email} className={`${item.status === "blocked" ? "grant-paused" : ""} ${!item.admin_reviewed_at && item.role !== "master" ? "grant-new" : ""}`}>
+          {!item.admin_reviewed_at && item.role !== "master" && <div className="new-registration-label">● Novo cadastro · teste automático de 15 dias</div>}
           <div className="grant-person"><span className="grant-avatar">{(item.display_name || item.email).slice(0, 1).toUpperCase()}</span><div><b>{item.display_name || "Professor(a)"}</b><span>{item.email}</span><small>{item.lifetime ? "✓ Acesso master vitalício" : `${item.status === "active" ? "✓ Ativo" : "Pausado"} até ${formatDeadline(item.expires_at)}`}</small>{item.last_seen_at && <small>Último acesso: {formatDeadline(item.last_seen_at)}</small>}</div></div>
           {item.role !== "master" && <div className="grant-controls">
             <div className="days-remaining">Restam <b>{remainingDays(item) ?? 0} dias</b></div>
@@ -148,6 +157,7 @@ export default function AccessManager({ onClose }: Props) {
             <label className="control-input exact-days"><span>Definir prazo exato em dias</span><input type="number" min="1" value={drafts[item.email]?.exactDays ?? 1} onChange={event => setDraft(item.email, "exactDays", Number(event.target.value))} /></label>
             <button className="save-deadline" onClick={() => void saveExactDeadline(item)}>Salvar novo prazo</button>
             <div className="secondary-actions"><button onClick={() => void toggleBlock(item)}>{item.status === "active" ? "Pausar acesso" : "Reativar acesso"}</button><button className="danger" onClick={() => void removeAccess(item)}>Remover</button></div>
+            {!item.admin_reviewed_at && <button className="keep-trial" onClick={() => void keepTrial(item)}>Manter teste de 15 dias</button>}
           </div>}
         </article>)}
         {!loading && filtered.length === 0 && <div className="access-empty"><span>⌕</span><b>Nenhum acesso encontrado</b><small>Revise o nome ou e-mail pesquisado.</small></div>}

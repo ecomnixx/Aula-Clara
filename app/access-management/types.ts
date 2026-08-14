@@ -7,6 +7,7 @@ export type AccessGrant = {
   expires_at: string | null;
   created_at?: string;
   last_seen_at?: string | null;
+  admin_reviewed_at?: string | null;
 };
 
 export function remainingDays(grant: AccessGrant | null) {

@@ -26,21 +26,19 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   assert.match(page, /\[1,2,3,4\]/);
 });
 
-test("menu lateral cobre as áreas do professor e a área master", async () => {
+test("menu lateral simplificado cobre as áreas essenciais e a área master", async () => {
   const page = await read("app/page.tsx");
   for (const label of [
     "Área inicial",
-    "Ativar captura de tela",
-    "Gerar aulas e provas",
-    "Plano bimestral",
     "Banco de provas",
-    "Ferramentas do professor",
     "Materiais e turmas",
     "Arquivos salvos",
     "Minha conta e acessos",
     "Gerenciar acessos",
   ]) assert.match(page, new RegExp(label));
   assert.match(page, /access\.isMaster/);
+  assert.match(page, /notification-bell/);
+  assert.match(page, /pendingRegistrations/);
 });
 
 test("gerenciamento isolado permite pesquisar e controlar dias", async () => {

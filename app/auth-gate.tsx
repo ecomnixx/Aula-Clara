@@ -22,10 +22,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [pendingRegistrations, setPendingRegistrations] = useState(0);
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
-    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at").eq("email", activeSession.user.email).maybeSingle();
+    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at,admin_reviewed_at").eq("email", activeSession.user.email).maybeSingle();
     setGrant((data as AccessGrant | null) ?? null);
     if (data) void supabase.rpc("touch_current_access");
     setLoading(false);
@@ -53,6 +54,21 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const allowed = grant?.status === "active" && !expired;
   const master = grant?.role === "master" || session?.user.email?.toLowerCase() === MASTER_EMAIL;
 
+  const loadPendingRegistrations = useCallback(async () => {
+    if (!master) { setPendingRegistrations(0); return; }
+    const { count } = await supabase.from("access_grants").select("email", { count: "exact", head: true }).eq("role", "client").is("admin_reviewed_at", null);
+    setPendingRegistrations(count ?? 0);
+  }, [master]);
+
+  useEffect(() => {
+    if (!master) return;
+    const timer = window.setTimeout(() => { void loadPendingRegistrations(); }, 0);
+    const channel = supabase.channel("master-new-signups")
+      .on("postgres_changes", { event: "*", schema: "public", table: "access_grants" }, () => { void loadPendingRegistrations(); })
+      .subscribe();
+    return () => { window.clearTimeout(timer); void supabase.removeChannel(channel); };
+  }, [loadPendingRegistrations, master]);
+
   async function submit() {
     setMessage("Processando...");
     if (!email || password.length < 6) { setMessage("Informe o e-mail e uma senha com pelo menos 6 caracteres."); return; }
@@ -60,7 +76,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({ email, password, options: { data: { name } } });
     if (result.error) setMessage(result.error.message);
-    else setMessage(mode === "signup" ? "Conta criada. Confira seu e-mail para confirmar o acesso." : "Acesso realizado.");
+    else setMessage(mode === "signup" ? "Conta criada com 15 dias de teste. Confira seu e-mail para confirmar o acesso." : "Acesso realizado.");
   }
 
   async function magicLink() {
@@ -111,7 +127,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     <button className="login-primary" onClick={() => supabase.auth.signOut()}>Usar outro e-mail</button>
   </section></main>;
 
-  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)" }}>
+  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
     {daysLeft !== null && daysLeft <= 7 && <div className="expiry-banner">Seu acesso termina em <b>{daysLeft} dia(s)</b>. Fale com o administrador para renovar.</div>}
     {children}
     {accountOpen && <div className="admin-backdrop" onClick={() => setAccountOpen(false)}><section className="account-panel" onClick={e => e.stopPropagation()}>

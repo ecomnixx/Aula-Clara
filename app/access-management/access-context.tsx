@@ -8,11 +8,12 @@ type AccessContextValue = {
   openAccount: () => void;
   userEmail: string;
   userName: string;
+  pendingRegistrations: number;
 };
 
 export const AccessContext = createContext<AccessContextValue | null>(null);
 
 export function useAccessControl() {
   const context = useContext(AccessContext);
-  return context ?? { isMaster: false, openAccessManager: () => undefined, openAccount: () => undefined, userEmail: "", userName: "Professor(a)" };
+  return context ?? { isMaster: false, openAccessManager: () => undefined, openAccount: () => undefined, userEmail: "", userName: "Professor(a)", pendingRegistrations: 0 };
 }
