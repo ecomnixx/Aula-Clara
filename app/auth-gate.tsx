@@ -9,6 +9,7 @@ import { AccessContext } from "./access-management/access-context";
 import { isGrantExpired, remainingDays, type AccessGrant } from "./access-management/types";
 
 const MASTER_EMAIL = "ecomnixx@gmail.com";
+const APP_INSTALL_URL = "https://aulaclara-docente.vercel.app/";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 
 export default function AuthGate({ children }: { children: ReactNode }) {
@@ -27,6 +28,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installHelp, setInstallHelp] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [installLinkMessage, setInstallLinkMessage] = useState("");
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
@@ -110,6 +112,16 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     if (choice.outcome === "accepted") setInstallPrompt(null);
   }
 
+  async function copyInstallLink() {
+    try { await navigator.clipboard.writeText(APP_INSTALL_URL); setInstallLinkMessage("Link copiado. Agora você pode enviá-lo ao professor."); }
+    catch { setInstallLinkMessage(`Copie este endereço: ${APP_INSTALL_URL}`); }
+  }
+
+  async function shareInstallLink() {
+    if (navigator.share) await navigator.share({ title: "Instalar Aula Clara", text: "Abra este link no Google Chrome para instalar o Aula Clara.", url: APP_INSTALL_URL });
+    else await copyInstallLink();
+  }
+
   if (loading) return <div className="auth-loading"><span></span><b>Abrindo Aula Clara...</b></div>;
 
   if (!session) return <main className="login-page">
@@ -147,7 +159,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     <button className="login-primary" onClick={() => supabase.auth.signOut()}>Usar outro e-mail</button>
   </section></main>;
 
-  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), openInstall: () => { setInstallHelp(false); setInstallOpen(true); }, userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
+  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), openInstall: () => { setInstallHelp(false); setInstallLinkMessage(""); setInstallOpen(true); }, userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)", pendingRegistrations }}>
     {daysLeft !== null && daysLeft <= 7 && <div className="expiry-banner">Seu acesso termina em <b>{daysLeft} dia(s)</b>. Fale com o administrador para renovar.</div>}
     {children}
     {accountOpen && <div className="admin-backdrop" onClick={() => setAccountOpen(false)}><section className="account-panel" onClick={e => e.stopPropagation()}>
@@ -158,8 +170,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <button className="link-button" onClick={() => supabase.auth.signOut()}>Sair deste aparelho</button>
     </section></div>}
     {installOpen && <div className="admin-backdrop" onClick={() => setInstallOpen(false)}><section className="account-panel install-panel" onClick={event => event.stopPropagation()}>
-      <button className="panel-close" onClick={() => setInstallOpen(false)}>×</button><span className="install-symbol">↓</span><h2>Downloads e atualizações</h2><p>Instale o Aula Clara na tela inicial e use como um aplicativo.</p>
+      <button className="panel-close" onClick={() => setInstallOpen(false)}>×</button><span className="install-symbol">↓</span><h2>Downloads e atualizações</h2><p>Use o link oficial abaixo para abrir e instalar o Aula Clara no dispositivo.</p>
+      <a className="official-app-link" href={APP_INSTALL_URL} target="_blank" rel="noreferrer">{APP_INSTALL_URL}</a>
       <button className="login-primary install-app-button" onClick={() => void installApp()}>Instalar aplicativo neste dispositivo</button>
+      <div className="install-link-actions"><a href={APP_INSTALL_URL} target="_blank" rel="noreferrer">Abrir link oficial</a><button onClick={() => void copyInstallLink()}>Copiar link</button><button onClick={() => void shareInstallLink()}>Compartilhar</button></div>
+      {installLinkMessage && <div className="auth-message">{installLinkMessage}</div>}
       {installHelp && <div className="install-help">{window.matchMedia("(display-mode: standalone)").matches ? <><b>O aplicativo já está instalado.</b><br/>As atualizações são recebidas automaticamente quando você abrir o Aula Clara.</> : <>Abra este endereço no <b>Google Chrome</b>, toque no menu ⋮ e escolha <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</>}</div>}
       <small>Versão atual: Aula Clara 3.1 · atualização automática</small>
     </section></div>}

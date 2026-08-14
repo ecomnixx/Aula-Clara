@@ -81,6 +81,10 @@ test("PWA está instalável como aplicativo Android", async () => {
   assert.match(sw, /clients\.claim/);
   assert.match(auth, /beforeinstallprompt/);
   assert.match(auth, /Instalar aplicativo neste dispositivo/);
+  assert.match(auth, /APP_INSTALL_URL/);
+  assert.match(auth, /Abrir link oficial/);
+  assert.match(auth, /Copiar link/);
+  assert.match(auth, /Compartilhar/);
 });
 
 test("banco usa RLS e trilha de auditoria para acessos", async () => {
