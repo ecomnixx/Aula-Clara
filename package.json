@@ -22,6 +22,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@bubblewrap/cli": "^1.25.0",
     "@cloudflare/vite-plugin": "1.37.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",

@@ -42,3 +42,6 @@ next-env.d.ts
 /work/
 dev-output.log
 dev-error.log
+/android/android-keystore
+/android/.signing.env
+/android/*.jks

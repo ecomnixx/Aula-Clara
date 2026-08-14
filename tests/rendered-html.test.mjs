@@ -1,91 +1,80 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
+const root = new URL("../", import.meta.url);
+const read = (path) => readFile(new URL(path, root), "utf8");
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-}
-
-test("server-renders the starter loading skeleton", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Building your site/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(
-    html,
-    /Your first version will appear here automatically when it’s ready\./,
-  );
-  assert.doesNotMatch(html, /Codex/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
+test("a experiência principal oferece captura, OCR, aula, prova e pastas", async () => {
+  const page = await read("app/page.tsx");
+  for (const label of [
+    "Abrir câmera",
+    "Escolher arquivos",
+    "Limpar todo o material lido",
+    "Capturar a tela inteira",
+    "Ler imagens",
+    "Gerar aula",
+    "Gerar prova",
+    "Baixar Word",
+    "Salvar na pasta",
+  ]) assert.match(page, new RegExp(label));
+  assert.match(page, /\[\.\.\.mc,\.\.\.disc\]/);
+  assert.match(page, /font-family:Arial/);
+  assert.match(page, /font-size:11pt/);
+  assert.match(page, /line-height:1/);
+  assert.match(page, /GABARITO DO PROFESSOR/);
+  assert.match(page, /\[1,2,3,4\]/);
 });
 
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
-  ]);
+test("menu lateral cobre as áreas do professor e a área master", async () => {
+  const page = await read("app/page.tsx");
+  for (const label of [
+    "Área inicial",
+    "Ativar captura de tela",
+    "Gerar aulas e provas",
+    "Plano bimestral",
+    "Banco de provas",
+    "Ferramentas do professor",
+    "Materiais e turmas",
+    "Arquivos salvos",
+    "Minha conta e acessos",
+    "Gerenciar acessos",
+  ]) assert.match(page, new RegExp(label));
+  assert.match(page, /access\.isMaster/);
+});
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
+test("gerenciamento isolado permite pesquisar e controlar dias", async () => {
+  const manager = await read("app/access-management/access-manager.tsx");
+  const context = await read("app/access-management/access-context.tsx");
+  assert.match(manager, /Buscar por nome ou e-mail/);
+  assert.match(manager, /Cadastrar e liberar acesso/);
+  assert.match(manager, /changeDays\(item, -1\)/);
+  assert.match(manager, /changeDays\(item, 1\)/);
+  assert.match(manager, /Salvar novo prazo/);
+  assert.match(manager, /postgres_changes/);
+  assert.match(manager, /Pausar|Reativar/);
+  assert.match(manager, /Remover/);
+  assert.match(manager, /access_events/);
+  assert.match(context, /openAccessManager/);
+});
 
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
-  );
+test("PWA está instalável como aplicativo Android", async () => {
+  const manifest = JSON.parse(await read("public/manifest.webmanifest"));
+  const sw = await read("public/sw.js");
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.orientation, "portrait-primary");
+  assert.equal(manifest.scope, "/");
+  assert.equal(manifest.icons.length, 2);
+  assert.ok(manifest.icons.every((icon) => icon.purpose.includes("maskable")));
+  assert.match(sw, /skipWaiting/);
+  assert.match(sw, /clients\.claim/);
+});
 
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
-
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+test("banco usa RLS e trilha de auditoria para acessos", async () => {
+  const migration = await read("supabase/migrations/20260810_access_management.sql");
+  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /create table if not exists public\.access_events/i);
+  assert.match(migration, /is_aula_clara_master/i);
+  assert.match(migration, /touch_current_access/i);
+  assert.match(migration, /last_seen_at/i);
 });

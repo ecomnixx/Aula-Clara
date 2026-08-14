@@ -4,44 +4,30 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-
-type Grant = {
-  email: string;
-  display_name: string | null;
-  role: "master" | "client";
-  status: "active" | "blocked";
-  lifetime: boolean;
-  expires_at: string | null;
-};
+import AccessManager from "./access-management/access-manager";
+import { AccessContext } from "./access-management/access-context";
+import { isGrantExpired, remainingDays, type AccessGrant } from "./access-management/types";
 
 const MASTER_EMAIL = "ecomnixx@gmail.com";
 
-function remainingDays(grant: Grant | null) {
-  if (!grant || grant.lifetime || !grant.expires_at) return null;
-  return Math.max(0, Math.ceil((new Date(grant.expires_at).getTime() - Date.now()) / 86400000));
-}
-
 export default function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [grant, setGrant] = useState<Grant | null>(null);
+  const [grant, setGrant] = useState<AccessGrant | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [grants, setGrants] = useState<Grant[]>([]);
-  const [newEmail, setNewEmail] = useState("");
-  const [newName, setNewName] = useState("");
-  const [days, setDays] = useState(30);
-  const [announcement, setAnnouncement] = useState("");
 
   const loadGrant = useCallback(async (activeSession: Session | null) => {
     if (!activeSession?.user.email) { setGrant(null); setLoading(false); return; }
-    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at").eq("email", activeSession.user.email).maybeSingle();
-    setGrant((data as Grant | null) ?? null);
+    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at,created_at,last_seen_at").eq("email", activeSession.user.email).maybeSingle();
+    setGrant((data as AccessGrant | null) ?? null);
+    if (data) void supabase.rpc("touch_current_access");
     setLoading(false);
   }, []);
 
@@ -51,8 +37,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, [loadGrant]);
 
+  useEffect(() => {
+    const activeEmail = session?.user.email;
+    if (!activeEmail) return;
+    const channel = supabase.channel(`access-live-${session.user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "access_grants", filter: `email=eq.${activeEmail}` }, () => { void loadGrant(session); })
+      .subscribe();
+    const refreshOnFocus = () => { if (document.visibilityState === "visible") void loadGrant(session); };
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => { document.removeEventListener("visibilitychange", refreshOnFocus); void supabase.removeChannel(channel); };
+  }, [loadGrant, session]);
+
   const daysLeft = useMemo(() => remainingDays(grant), [grant]);
-  const expired = grant && !grant.lifetime && (!grant.expires_at || new Date(grant.expires_at).getTime() <= Date.now());
+  const expired = isGrantExpired(grant);
   const allowed = grant?.status === "active" && !expired;
   const master = grant?.role === "master" || session?.user.email?.toLowerCase() === MASTER_EMAIL;
 
@@ -77,48 +74,18 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     if (error) setMessage("O acesso Google ainda precisa ser habilitado pelo administrador. Use e-mail e senha por enquanto.");
   }
 
-  async function loadGrants() {
-    const { data } = await supabase.from("access_grants").select("email,display_name,role,status,lifetime,expires_at").order("created_at", { ascending: false });
-    setGrants((data as Grant[]) || []);
-  }
-
-  useEffect(() => { if (master && adminOpen) loadGrants(); }, [master, adminOpen]);
-
-  async function addAccess() {
-    if (!newEmail) return;
-    const expires = new Date(Date.now() + Math.max(1, days) * 86400000).toISOString();
-    const { error } = await supabase.from("access_grants").upsert({ email: newEmail.trim().toLowerCase(), display_name: newName.trim() || null, role: "client", status: "active", lifetime: false, expires_at: expires });
-    setMessage(error ? error.message : "Acesso cadastrado.");
-    if (!error) { setNewEmail(""); setNewName(""); loadGrants(); }
-  }
-
-  async function changeDays(item: Grant, amount: number) {
-    const base = item.expires_at && new Date(item.expires_at).getTime() > Date.now() ? new Date(item.expires_at).getTime() : Date.now();
-    await supabase.from("access_grants").update({ lifetime: false, status: "active", expires_at: new Date(base + amount * 86400000).toISOString() }).eq("email", item.email);
-    loadGrants();
-  }
-
-  async function toggleBlock(item: Grant) {
-    await supabase.from("access_grants").update({ status: item.status === "active" ? "blocked" : "active" }).eq("email", item.email);
-    loadGrants();
-  }
-
-  async function sendAnnouncement() {
-    if (!announcement.trim()) return;
-    const { error } = await supabase.from("announcements").insert({ title: "Aviso do Aula Clara", body: announcement.trim(), created_by_email: MASTER_EMAIL });
-    setMessage(error ? error.message : "Aviso enviado aos usuários.");
-    if (!error) setAnnouncement("");
-  }
-
   if (loading) return <div className="auth-loading"><span></span><b>Abrindo Aula Clara...</b></div>;
 
   if (!session) return <main className="login-page">
-    <section className="login-card">
-      <div className="login-logo">A</div><span className="eyebrow">PLATAFORMA DOCENTE</span>
-      <h1>Bem-vindo ao Aula Clara</h1><p>Entre para criar aulas, provas e organizar seus materiais.</p>
-      {mode === "signup" && <label>Seu nome<input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do professor" /></label>}
-      <label>E-mail<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="professor@email.com" /></label>
-      <label>Senha<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" /></label>
+    <section className="login-shell">
+      <header className="login-brand"><div className="login-logo">A</div><div><span className="eyebrow">PLATAFORMA DOCENTE</span><strong>Aula Clara</strong></div></header>
+      <section className="login-card">
+      <div className="login-heading"><span>{mode === "login" ? "ACESSO DO PROFESSOR" : "NOVO CADASTRO"}</span><h1>{mode === "login" ? "Entre na sua conta" : "Crie sua conta"}</h1><p>{mode === "login" ? "Ainda não possui uma conta?" : "Já possui uma conta?"} <button onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Criar conta" : "Entrar"}</button></p></div>
+      <div className="login-fields">
+      {mode === "signup" && <label>Seu nome<input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do professor" autoComplete="name" /></label>}
+      <label>E-mail<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="professor@email.com" autoComplete="email" /></label>
+      <label>Senha<div className="password-field"><input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo de 6 caracteres" autoComplete={mode === "login" ? "current-password" : "new-password"} /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? "◉" : "◎"}</button></div></label>
+      {mode === "login" && <button className="forgot-link" onClick={magicLink}>Esqueci minha senha</button>}
       <button className="login-primary" onClick={submit}>{mode === "login" ? "Entrar" : "Criar minha conta"}</button>
       <button className="google-button" onClick={googleLogin}>
         <svg className="google-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -129,10 +96,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         </svg>
         <span>Continuar com Google</span>
       </button>
-      <button className="link-button" onClick={magicLink}>Receber link de acesso por e-mail</button>
-      <button className="link-button" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Primeiro acesso? Criar conta" : "Já tenho conta"}</button>
+      </div>
       {message && <div className="auth-message">{message}</div>}
       <small>Sua sessão fica salva neste aparelho para você não precisar entrar novamente.</small>
+      </section>
+      <footer>Planejamento, avaliações e organização em um só lugar.</footer>
     </section>
   </main>;
 
@@ -143,12 +111,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     <button className="login-primary" onClick={() => supabase.auth.signOut()}>Usar outro e-mail</button>
   </section></main>;
 
-  return <>
+  return <AccessContext.Provider value={{ isMaster: master, openAccessManager: () => setAdminOpen(true), openAccount: () => setAccountOpen(true), userEmail: session.user.email || "", userName: grant?.display_name || "Professor(a)" }}>
     {daysLeft !== null && daysLeft <= 7 && <div className="expiry-banner">Seu acesso termina em <b>{daysLeft} dia(s)</b>. Fale com o administrador para renovar.</div>}
-    <div className="account-fab">
-      {master && <button onClick={() => setAdminOpen(true)} title="Gerenciar acessos">⚙</button>}
-      <button onClick={() => setAccountOpen(true)} title="Minha conta">{(grant?.display_name || session.user.email || "P").slice(0, 1).toUpperCase()}</button>
-    </div>
     {children}
     {accountOpen && <div className="admin-backdrop" onClick={() => setAccountOpen(false)}><section className="account-panel" onClick={e => e.stopPropagation()}>
       <button className="panel-close" onClick={() => setAccountOpen(false)}>×</button><h2>Minha conta</h2>
@@ -157,12 +121,6 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       {master && <button className="login-primary" onClick={() => { setAccountOpen(false); setAdminOpen(true); }}>Gerenciar acessos</button>}
       <button className="link-button" onClick={() => supabase.auth.signOut()}>Sair deste aparelho</button>
     </section></div>}
-    {adminOpen && <div className="admin-backdrop"><section className="admin-panel">
-      <button className="panel-close" onClick={() => setAdminOpen(false)}>×</button><span className="eyebrow">PAINEL MASTER</span><h2>Gerenciar acessos</h2><p>Cadastre clientes, renove dias ou pause um acesso.</p>
-      <div className="admin-form"><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome" /><input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="E-mail do cliente" /><input type="number" min="1" value={days} onChange={e => setDays(Number(e.target.value))} /><button onClick={addAccess}>Liberar acesso</button></div>
-      <div className="grant-list">{grants.map(item => <article key={item.email}><div><b>{item.display_name || "Professor(a)"}</b><span>{item.email}</span><small>{item.lifetime ? "Vitalício" : `${remainingDays(item)} dia(s)`} · {item.status === "active" ? "Ativo" : "Pausado"}</small></div>{item.role !== "master" && <footer><button onClick={() => changeDays(item, 7)}>+7 dias</button><button onClick={() => changeDays(item, 30)}>+30 dias</button><button onClick={() => toggleBlock(item)}>{item.status === "active" ? "Pausar" : "Reativar"}</button></footer>}</article>)}</div>
-      <div className="announcement-form"><h3>Enviar aviso aos usuários</h3><textarea value={announcement} onChange={e => setAnnouncement(e.target.value)} placeholder="Digite uma mensagem..." /><button onClick={sendAnnouncement}>Enviar aviso</button></div>
-      {message && <div className="auth-message">{message}</div>}
-    </section></div>}
-  </>;
+    {adminOpen && <AccessManager onClose={() => setAdminOpen(false)} />}
+  </AccessContext.Provider>;
 }

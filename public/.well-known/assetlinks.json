@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.aulaclara.docente",
+      "sha256_cert_fingerprints": [
+        "74:5D:4C:F6:A3:EE:8F:A2:A4:2D:DE:F4:26:5A:85:A4:FC:BA:31:BB:4E:ED:94:36:A4:66:AA:11:75:74:A5:BD"
+      ]
+    }
+  }
+]
