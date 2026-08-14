@@ -26,6 +26,10 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   assert.match(page, /\[1,2,3,4\]/);
   assert.match(page, /foto-camera-/);
   assert.match(page, /cleanOcrText/);
+  assert.match(page, /Conteúdo Original Escaneado/);
+  assert.match(page, /COMPETÊNCIAS SOCIOEMOCIONAIS/);
+  assert.match(page, /ESTRATÉGIAS DE INCLUSÃO/);
+  assert.match(page, /AVALIAÇÃO FORMATIVA/);
   assert.doesNotMatch(page, /Importação rápida/);
 });
 
