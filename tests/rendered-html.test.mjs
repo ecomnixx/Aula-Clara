@@ -9,7 +9,7 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   const page = await read("app/page.tsx");
   for (const label of [
     "Abrir câmera",
-    "Escolher arquivos",
+    "Escolher na galeria",
     "Limpar todo o material lido",
     "Capturar a tela inteira",
     "Ler imagens",
@@ -24,6 +24,9 @@ test("a experiência principal oferece captura, OCR, aula, prova e pastas", asyn
   assert.match(page, /line-height:1/);
   assert.match(page, /GABARITO DO PROFESSOR/);
   assert.match(page, /\[1,2,3,4\]/);
+  assert.match(page, /foto-camera-/);
+  assert.match(page, /cleanOcrText/);
+  assert.doesNotMatch(page, /Importação rápida/);
 });
 
 test("menu lateral simplificado cobre as áreas essenciais e a área master", async () => {
