@@ -7,6 +7,8 @@ const read = (path) => readFile(new URL(path, root), "utf8");
 
 test("a experiência principal oferece captura, OCR, aula, prova e pastas", async () => {
   const page = await read("app/page.tsx");
+  assert.doesNotMatch(page, /Educação de Jovens e Adultos|EJA –/);
+  for (const grade of ["1º Ano", "5º Ano", "6º Ano", "9º Ano", "3ª Série EM"]) assert.match(page, new RegExp(grade));
   for (const label of [
     "Abrir câmera",
     "Escolher arquivos",
