@@ -69,12 +69,16 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     }, SESSION_TIMEOUT_MS + 1000);
     void withTimeout(supabase.auth.getSession()).then(({ data }) => {
       if (!active) return;
+      window.clearTimeout(watchdog);
+      setConnectionError(false);
       setSession(data.session);
       void loadGrant(data.session);
     }).catch(error => {
       if (!active) return;
+      window.clearTimeout(watchdog);
       console.error("[Aula Clara] Falha ao restaurar a sessão", error);
-      setMessage("Não foi possível restaurar a sessão. Entre novamente para continuar.");
+      setConnectionError(false);
+      setMessage("A sessão anterior não pôde ser restaurada. Entre novamente para continuar.");
       setSession(null);
       setLoading(false);
     });
