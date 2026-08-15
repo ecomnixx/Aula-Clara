@@ -1,0 +1,63 @@
+{
+  "packageId": "app.aulaclara.docente",
+  "host": "aulaclara-docente.vercel.app",
+  "name": "Aula Clara — Plataforma Docente",
+  "launcherName": "Aula Clara",
+  "display": "standalone",
+  "themeColor": "#40596A",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FAF8F3",
+  "enableNotifications": false,
+  "startUrl": "/?source=android",
+  "iconUrl": "https://aulaclara-docente.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://aulaclara-docente.vercel.app/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:\\Users\\Lucas\\Documents\\Codex\\2026-08-10\\eu-quero-que\\work\\Aula-clara-x3\\android\\android-keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Gerar material",
+      "shortName": "Criar",
+      "url": "https://aulaclara-docente.vercel.app/?view=create",
+      "chosenIconUrl": "https://aulaclara-docente.vercel.app/icon-192.png"
+    },
+    {
+      "name": "Arquivos salvos",
+      "shortName": "Pastas",
+      "url": "https://aulaclara-docente.vercel.app/?view=saved",
+      "chosenIconUrl": "https://aulaclara-docente.vercel.app/icon-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://aulaclara-docente.vercel.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://aulaclara-docente.vercel.app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait-primary",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "appVersion": "1.0.0"
+}
