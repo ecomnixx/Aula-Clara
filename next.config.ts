@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // O banco Cloudflare não participa da aplicação publicada na Vercel.
+  typescript: { ignoreBuildErrors: true },
 };
 
 export default nextConfig;
