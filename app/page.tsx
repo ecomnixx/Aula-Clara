@@ -22,12 +22,14 @@ function cleanOcrText(raw:string){
  return lines.filter((line,index)=>{
   if(!line)return false;
   const plain=line.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-  if(/salvar anotac(ao|oes)|livro do aluno|manual do professor|material digital|www\.|https?:\/\//i.test(plain))return false;
+  if(/salvar anotac(ao|oes)|livro do aluno|manual do professor|material digital|visualizar|relatorio|bateria|www\.|https?:\/\//i.test(plain))return false;
   if(/^(pagina|pag\.?|p\.)\s*\d+(\s*(de|\/|-)\s*\d+)?$/i.test(plain))return false;
   if(/^(\d+\s*[|·•-]\s*)?(pagina|pag\.?|p\.)?\s*\d+\s*$/i.test(plain))return false;
   if((index<5||index>lastIndex-5)&&/^(nome|aluno|professor|disciplina|ano\s*\/\s*serie|turma|data)\s*:/i.test(plain))return false;
   if((index<4||index>lastIndex-4)&&/^\d{1,4}$/.test(plain))return false;
   if((index<5||index>lastIndex-5)&&allSubjectNames.some(name=>plain===name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()))return false;
+  const tokens=plain.split(/\s+/).filter(Boolean);const tiny=tokens.filter(token=>token.length<=2).length;const letters=(plain.match(/[a-z]/g)||[]).length;const symbols=(plain.match(/[^a-z0-9\s.,;:!?()áéíóúãõâêôç-]/g)||[]).length;
+  if(tokens.length>=6&&(tiny/tokens.length>.48||letters<plain.length*.42||symbols>plain.length*.14))return false;
   return true;
  }).join("\n").replace(/([a-zá-ú])-\n([a-zá-ú])/gi,"$1$2").replace(/\n{3,}/g,"\n\n").trim();
 }
@@ -44,6 +46,23 @@ function removeRepeatedPageFurniture(pages:string[]){
   const isEdge=index<5||index>=lines.length-5;
   return !(isEdge&&normalized.length<100&&(edgeCounts.get(normalized)||0)>1);
  }).join("\n").trim()).filter(Boolean).join("\n\n");
+}
+
+async function prepareImageForOcr(source:string|File){
+ const dataUrl=typeof source==="string"?source:await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));reader.onerror=()=>reject(reader.error);reader.readAsDataURL(source)});
+ const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const element=new Image();element.onload=()=>resolve(element);element.onerror=reject;element.src=dataUrl});
+ const screenshot=image.height/image.width>1.55;
+ const sx=screenshot?Math.round(image.width*.035):0;
+ const sy=screenshot?Math.round(image.height*.20):0;
+ const sw=screenshot?Math.round(image.width*.93):image.width;
+ const sh=screenshot?Math.round(image.height*.68):image.height;
+ const scale=Math.min(3,Math.max(1.6,1800/sw));
+ const canvas=document.createElement("canvas");canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);
+ const context=canvas.getContext("2d",{willReadFrequently:true});if(!context)return dataUrl;
+ context.imageSmoothingEnabled=true;context.imageSmoothingQuality="high";context.drawImage(image,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+ const pixels=context.getImageData(0,0,canvas.width,canvas.height);const values=pixels.data;
+ for(let index=0;index<values.length;index+=4){const gray=.299*values[index]+.587*values[index+1]+.114*values[index+2];const contrasted=Math.max(0,Math.min(255,(gray-128)*1.7+148));values[index]=values[index+1]=values[index+2]=contrasted>235?255:contrasted;}
+ context.putImageData(pixels,0,0);return canvas.toDataURL("image/png");
 }
 const topics:Record<string,string>={"Língua Portuguesa":"leitura, interpretação e gêneros discursivos",Matemática:"resolução de problemas, grandezas e proporcionalidade",Ciências:"ecossistemas e relações entre os seres vivos",História:"transformações históricas e diversidade cultural",Geografia:"território, paisagem e relações socioambientais","Educação Física":"jogos, esportes, inclusão e cooperação",Arte:"linguagens artísticas e processos criativos",Inglês:"leitura e compreensão de textos cotidianos"};
 const skills:Record<string,string[]>={"Língua Portuguesa":["EF67LP28","EF69LP44"],Matemática:["EF06MA15","EF07MA17"],Ciências:["EF07CI07","EF08CI07"],História:["EF06HI05","EF08HI14"],Geografia:["EF06GE01","EF08GE05"],"Educação Física":["EF67EF03","EF89EF06"],Arte:["EF69AR05","EF69AR06"],Inglês:["EF06LI08","EF08LI05"]};
@@ -72,7 +91,7 @@ async function addFiles(list:FileList|File[]|null){if(!list)return;const incomin
  function captureVideo(name=`foto-camera-${Date.now()}.jpg`){const video=videoRef.current;if(!video||!video.videoWidth){flash("Aguarde a câmera ficar pronta");return}const c=document.createElement("canvas");c.width=video.videoWidth;c.height=video.videoHeight;c.getContext("2d")?.drawImage(video,0,0);c.toBlob(b=>{if(b){addFiles([new File([b],name,{type:"image/jpeg"})]);if(name.startsWith("foto-camera-"))stopStream()}},"image/jpeg",.92)}
  async function openScreenCapture(){setScreenOpen(true)}
  async function delayedScreenShot(){setScreenOpen(false);setCountdown(2);await new Promise(r=>setTimeout(r,1000));setCountdown(1);await new Promise(r=>setTimeout(r,1000));setCountdown(null);try{const browserImport=new Function("url","return import(url)") as (url:string)=>Promise<{default:(element:HTMLElement,options:Record<string,unknown>)=>Promise<HTMLCanvasElement>}>;const {default:html2canvas}=await browserImport("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/+esm");const page=document.documentElement;const canvas=await html2canvas(document.body,{useCORS:true,backgroundColor:"#faf8f3",scale:1,width:page.scrollWidth,height:page.scrollHeight,windowWidth:page.scrollWidth,windowHeight:page.scrollHeight,scrollX:0,scrollY:0,ignoreElements:(element:Element)=>element.hasAttribute("data-capture-ignore")});const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",.92));if(!blob)throw new Error("Falha ao gerar imagem");addFiles([new File([blob],`captura-tela-${Date.now()}.jpg`,{type:"image/jpeg"})]);flash("Tela inteira adicionada ao material")}catch(error){console.error("[Aula Clara] Falha na captura da página",error);flash("Não foi possível capturar a página inteira neste aparelho")}}
- async function readImages(){if(!files.length){flash("Adicione pelo menos uma imagem");return}setReading(true);setOcrProgress(0);const pages:string[]=[];let worker:Awaited<ReturnType<(typeof import("tesseract.js"))["createWorker"]>>|null=null;try{const {createWorker}=await import("tesseract.js");worker=await createWorker("por",undefined,{logger:m=>{if(m.status==="recognizing text")setOcrProgress(Math.round((m.progress||0)*100))}});for(let i=0;i<files.length;i++){const source=previewUrls[i]||files[i];const {data}=await worker.recognize(source);const content=cleanOcrText(data.text);if(content)pages.push(content);setOcrProgress(Math.round(((i+1)/files.length)*100))}const recognized=removeRepeatedPageFurniture(pages);setOcrText(recognized);if(!recognized)flash("A leitura terminou, mas nenhum texto legível foi encontrado");else flash("Conteúdo da apostila identificado")}catch(error){console.error("[Aula Clara] Falha no OCR",error);flash("A leitura falhou. Mantenha o aplicativo aberto e tente novamente.")}finally{if(worker)await worker.terminate().catch(()=>undefined);setReading(false)}}
+ async function readImages(){if(!files.length){flash("Adicione pelo menos uma imagem");return}setReading(true);setOcrProgress(0);const pages:string[]=[];let worker:Awaited<ReturnType<(typeof import("tesseract.js"))["createWorker"]>>|null=null;try{const {createWorker}=await import("tesseract.js");worker=await createWorker("por",undefined,{logger:m=>{if(m.status==="recognizing text")setOcrProgress(Math.round((m.progress||0)*100))}});await worker.setParameters({preserve_interword_spaces:"1"});for(let i=0;i<files.length;i++){const source=await prepareImageForOcr(previewUrls[i]||files[i]);const {data}=await worker.recognize(source);const content=cleanOcrText(data.text);if(content)pages.push(content);setOcrProgress(Math.round(((i+1)/files.length)*100))}const recognized=removeRepeatedPageFurniture(pages);setOcrText(recognized);if(!recognized)flash("A leitura terminou, mas nenhum texto legível foi encontrado");else flash("Conteúdo da apostila identificado")}catch(error){console.error("[Aula Clara] Falha no OCR",error);flash("A leitura falhou. Mantenha o aplicativo aberto e tente novamente.")}finally{if(worker)await worker.terminate().catch(()=>undefined);setReading(false)}}
  async function copyOcrText(){if(!ocrText)return;try{await navigator.clipboard.writeText(ocrText);flash("Texto transcrito copiado")}catch{flash("Não foi possível copiar automaticamente")}}
  const classification=`Mapeado para ${subject} · ${grade} · ${segment}. Habilidades relacionadas: ${(skills[subject]||[]).join(", ")}. Unidade temática: ${topic}.`;
  const totalMinutes=Math.max(50,lessons*50); const connectionMinutes=Math.round(totalMinutes*.2); const practiceMinutes=Math.round(totalMinutes*.4); const reflectionMinutes=Math.round(totalMinutes*.3); const closingMinutes=totalMinutes-connectionMinutes-practiceMinutes-reflectionMinutes;
