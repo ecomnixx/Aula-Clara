@@ -9,8 +9,8 @@ import { AccessContext } from "./access-management/access-context";
 import { isGrantExpired, remainingDays, type AccessGrant } from "./access-management/types";
 
 const MASTER_EMAIL = "ecomnixx@gmail.com";
-const APP_INSTALL_URL = "https://aulaclara-docente.vercel.app/";
-const APP_DOWNLOAD_URL = "https://aulaclara-docente.vercel.app/baixar.html";
+const APP_INSTALL_URL = "https://aula-clara-professor-tawny.vercel.app/";
+const APP_DOWNLOAD_URL = "https://aula-clara-professor-tawny.vercel.app/baixar.html";
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
 const SESSION_TIMEOUT_MS = 8000;
 
