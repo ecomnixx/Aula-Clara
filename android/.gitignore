@@ -1,0 +1,9 @@
+.gradle/
+build/
+app/build/
+local-maven/
+.signing.env
+android-keystore
+*.apk
+*.aab
+*.idsig
